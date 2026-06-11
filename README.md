@@ -518,30 +518,6 @@ docker run -p 8000:8000 --env-file .env yourdockerhubname/factoryeye:latest
 
 ---
 
-## Interview Talking Points
-
-These are the questions you will be asked. Know these before any technical screen.
-
-**"Why YOLO26 over YOLOv8?"**
-YOLO26 uses NMS-free inference — the Non-Maximum Suppression step is baked into the model itself rather than applied post-hoc. This reduces system complexity and latency. It is also 43% faster on CPU than previous versions, which matters when deploying without a GPU.
-
-**"Why FastAPI over Flask?"**
-FastAPI is async-native. YOLO26 inference is CPU-bound, so I offload it to a thread pool with `asyncio.to_thread` — this means the event loop is never blocked and the server can handle concurrent requests. Flask would need a worker pool or gunicorn config to achieve the same. FastAPI also generates OpenAPI docs automatically.
-
-**"Why MLflow? What did you actually use it for?"**
-Three things: experiment tracking (every training run is logged so I can compare hyperparameters and metrics), model registry (only models with mAP50 ≥ 0.70 get registered, which prevents deploying degraded models), and artifact storage (trained weights are stored alongside the run that produced them, so results are fully reproducible).
-
-**"How would you handle model drift in production?"**
-Monitor the distribution of confidence scores over time. If the mean confidence on production traffic drops significantly below what you saw during validation — without a code change — that is a signal the input distribution has drifted. You would set a threshold alert on a rolling average, trigger retraining with newly labelled production samples, and use the model registry to compare the retrained model before promoting it.
-
-**"How would you scale this to 50 simultaneous camera feeds?"**
-Replace the synchronous per-request model with a message queue (Redis Streams or Kafka). Each camera publishes frames to a topic. A pool of worker processes consumes from the queue and runs inference in parallel. The API becomes a thin layer that reads results from the queue. This decouples ingestion speed from inference speed and lets you scale workers independently.
-
-**"What would you change about this architecture in a real production system?"**
-Three things: (1) move model artifacts from the local filesystem to S3 so they survive container restarts; (2) add Prometheus metrics on inference latency and defect rate per class so you can alert on degradation; (3) replace the sync Slack alert with an event-driven alert pipeline that can fan out to multiple channels based on defect severity.
-
----
-
 ## Roadmap
 
 - [ ] Automated retraining pipeline triggered by confidence score drift
@@ -558,7 +534,3 @@ Three things: (1) move model artifacts from the local filesystem to S3 so they s
 MIT License — see `LICENSE` for details.
 
 ---
-
-## Author
-
-Built as an Applied AI Engineer portfolio project demonstrating end-to-end MLOps: model training, experiment tracking, production serving, and containerised deployment.
