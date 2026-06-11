@@ -50,8 +50,6 @@ POST /predict
 - [Docker Deployment](#docker-deployment)
 - [Running Tests](#running-tests)
 - [Deploying to Production](#deploying-to-production)
-- [Interview Talking Points](#interview-talking-points)
-- [Roadmap](#roadmap)
 
 ---
 
