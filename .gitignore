@@ -1,0 +1,15 @@
+# Python virtual environment
+.venv/
+
+# Dataset (too large for GitHub)
+dataset/
+
+# YOLO training outputs
+runs/
+
+# Mac system file
+.DS_Store
+
+# Model weights (optional but recommended)
+*.pt
+*.pth
