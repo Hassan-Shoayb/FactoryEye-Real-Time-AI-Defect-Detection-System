@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: factoryeye_api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=training/runs/train/weights/best.pt
+      - CONFIDENCE_THRESHOLD=0.50
+      - DEVICE=cpu
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - ../training/runs:/app/training/runs
+    restart: unless-stopped
+    depends_on:
+      - mlflow
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.15.0
+    container_name: factoryeye_mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    volumes:
+      - ../mlflow_tracking:/mlflow
+    restart: unless-stopped

@@ -1,15 +1,28 @@
 # Python virtual environment
 .venv/
+venv/
+__pycache__/
+*.pytest_cache/
+
+# Environment Variables
+.env
 
 # Dataset (too large for GitHub)
 dataset/
+data/raw/
+data/processed/
 
 # YOLO training outputs
-runs/
+/runs/
+/runs_notebook/
+training/runs/train/weights/*.pt
+!training/runs/train/weights/README.md
 
 # Mac system file
 .DS_Store
 
-# Model weights (optional but recommended)
+# Model weights
 *.pt
 *.pth
+*.onnx
+*.engine
