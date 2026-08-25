@@ -11,6 +11,8 @@ __pycache__/
 dataset/
 data/raw/
 data/processed/
+data/active_learning_queue/
+
 
 # YOLO training outputs
 /runs/
