@@ -13,12 +13,17 @@ from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.config import API_VERSION, CONFIDENCE_THRESHOLD, MODEL_PATH, DEVICE
-from api.schemas import PredictResponse, VideoPredictResponse, VideoFrameResult, HealthResponse, Detection
+from api.schemas import (
+    PredictResponse, VideoPredictResponse, VideoFrameResult, HealthResponse, Detection,
+    AuditQueryResponse, DefectStatsSummary
+)
 from api.inference import engine
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
 from api.mqtt_publisher import mqtt_publisher
+from api.database import audit_db
+from api.rtsp_stream import RTSPCameraWorker, active_rtsp_workers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("factoryeye.api")
@@ -30,11 +35,13 @@ async def lifespan(app: FastAPI):
         engine.load_model()
     logger.info(f"✓ Active model: {engine.model_path} ({engine.backend_type})")
     yield
+    for worker in active_rtsp_workers.values():
+        worker.stop()
     logger.info("🛑 FactoryEye API shutting down...")
 
 app = FastAPI(
     title="FactoryEye — Real-Time AI Defect Detection API",
-    description="Production-grade REST & WebSocket Computer Vision API with Prometheus observability and drift tracking.",
+    description="Enterprise REST, WebSocket & RTSP Computer Vision platform with Prometheus telemetry and defect audit logging.",
     version=API_VERSION,
     lifespan=lifespan
 )
@@ -47,7 +54,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── 1. Liveness & Health Probe ──────────────────────────────────────────────
+# ── 1. Health Probe ─────────────────────────────────────────────────────────
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
     return HealthResponse(
@@ -58,27 +65,48 @@ async def health_check():
         device=f"{engine.device} ({engine.backend_type})"
     )
 
-# ── 2. Prometheus Observability Metrics ─────────────────────────────────────
+# ── 2. Prometheus Metrics ───────────────────────────────────────────────────
 @app.get("/metrics", response_class=PlainTextResponse, tags=["Observability"])
 async def prometheus_metrics():
-    """Exposes Prometheus-formatted metrics (P95 latency, defect counts, active streams)."""
     return Response(
         content=metrics_collector.generate_prometheus_metrics(),
         media_type="text/plain; version=0.0.4; charset=utf-8"
     )
 
-# ── 3. Data Drift & MLOps Telemetry ─────────────────────────────────────────
+# ── 3. Data Drift & MLOps Stats ─────────────────────────────────────────────
 @app.get("/drift/stats", tags=["MLOps"])
 async def drift_statistics():
-    """Returns rolling confidence statistics and active learning queue status."""
     return drift_monitor.get_stats()
 
-# ── 4. REST Single Image Inference ──────────────────────────────────────────
+# ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
+@app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])
+async def get_audit_defects(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    defect_class: str = Query(None, description="Filter by defect class"),
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0)
+):
+    """Queries persistent QA defect inspection records with pagination and class filtering."""
+    records, total = audit_db.query_defects(limit, offset, defect_class, min_confidence)
+    return AuditQueryResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        records=records
+    )
+
+@app.get("/audit/stats/summary", response_model=DefectStatsSummary, tags=["Audit & QA"])
+async def get_audit_stats_summary():
+    """Returns comprehensive factory line QA metrics (Yield %, Defect Rate %, Class Breakdown)."""
+    return audit_db.get_summary_stats()
+
+# ── 5. REST Single Image Inference ──────────────────────────────────────────
 @app.post("/predict", response_model=PredictResponse, tags=["Inference"])
 async def predict_image(
     file: UploadFile = File(..., description="Steel surface image file (JPEG/PNG)"),
     conf: float = Query(CONFIDENCE_THRESHOLD, ge=0.05, le=1.0, description="Confidence threshold"),
-    return_annotated: bool = Query(True, description="Include base64 annotated image")
+    return_annotated: bool = Query(True, description="Include base64 annotated image"),
+    station_id: str = Query("STATION_01", description="Inspection station identifier")
 ):
     if file.content_type and not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a valid image (JPEG/PNG).")
@@ -97,13 +125,11 @@ async def predict_image(
 
     defect_count = len(detections)
 
-    # 1. Record Prometheus metrics
+    # Telemetry, Drift & Audit Logging
     metrics_collector.record_inference(inference_ms, detections)
-
-    # 2. Check Data Drift & Active Learning
     drift_monitor.analyze_predictions(frame, detections)
+    audit_db.log_inspection(defect_count, detections, inference_ms, source=f"Image: {file.filename}", station_id=station_id)
 
-    # 3. Trigger Alerts & Industrial MQTT if defects found
     if defect_count > 0:
         asyncio.create_task(alert_manager.send_defect_alert(
             defect_count=defect_count,
@@ -126,7 +152,7 @@ async def predict_image(
         annotated_image=annotated_b64
     )
 
-# ── 5. REST Video Clip Inspection ───────────────────────────────────────────
+# ── 6. REST Video Clip Inspection ───────────────────────────────────────────
 @app.post("/predict-video", response_model=VideoPredictResponse, tags=["Inference"])
 async def predict_video(
     file: UploadFile = File(..., description="Video clip (MP4, AVI, MOV)"),
@@ -163,6 +189,7 @@ async def predict_video(
 
                 metrics_collector.record_inference(inf_ms, detections)
                 drift_monitor.analyze_predictions(frame, detections)
+                audit_db.log_inspection(len(detections), detections, inf_ms, source="Video Clip", station_id="VIDEO_LINE_01")
 
                 frame_results.append(VideoFrameResult(
                     frame=frame_idx,
@@ -188,7 +215,7 @@ async def predict_video(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-# ── 6. Live WebSocket Camera Streaming ──────────────────────────────────────
+# ── 7. Live WebSocket Camera Streaming ──────────────────────────────────────
 @app.websocket("/ws/stream")
 async def websocket_video_stream(websocket: WebSocket):
     await websocket.accept()
@@ -211,6 +238,14 @@ async def websocket_video_stream(websocket: WebSocket):
             metrics_collector.record_inference(inf_ms, detections)
             drift_monitor.analyze_predictions(frame, detections)
 
+            if len(detections) > 0:
+                audit_db.log_inspection(len(detections), detections, inf_ms, source="Live Stream", station_id="CAMERA_01")
+                mqtt_publisher.publish_defect_event(
+                    defect_count=len(detections),
+                    detections=[d.model_dump() for d in detections],
+                    source="WebSocket Live Stream"
+                )
+
             await websocket.send_json({
                 "frame": engine.encode_frame_to_base64(annotated, quality=75),
                 "detections": [d.model_dump() for d in detections],
@@ -219,13 +254,6 @@ async def websocket_video_stream(websocket: WebSocket):
                 "inference_ms": inf_ms
             })
 
-            if len(detections) > 0:
-                mqtt_publisher.publish_defect_event(
-                    defect_count=len(detections),
-                    detections=[d.model_dump() for d in detections],
-                    source="WebSocket Live Stream"
-                )
-
     except WebSocketDisconnect:
         metrics_collector.stream_disconnected()
         logger.info("WebSocket camera client disconnected.")
@@ -233,7 +261,7 @@ async def websocket_video_stream(websocket: WebSocket):
         metrics_collector.stream_disconnected()
         logger.error(f"WebSocket error: {e}")
 
-# ── 7. Operator Web Frontend Static Mount ───────────────────────────────────
+# ── 8. Operator Web Frontend Static Mount ───────────────────────────────────
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 if FRONTEND_DIR.exists():
     @app.get("/", include_in_schema=False)

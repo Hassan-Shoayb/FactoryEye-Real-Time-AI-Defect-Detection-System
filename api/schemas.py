@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 class Detection(BaseModel):
@@ -32,3 +32,33 @@ class HealthResponse(BaseModel):
     model_path: str = Field(..., description="Path to active model weights")
     version: str = Field(..., description="API Version")
     device: str = Field(..., description="Inference device (cpu, cuda, mps)")
+
+class AuditDefectItem(BaseModel):
+    id: int
+    inspection_id: int
+    timestamp_utc: float
+    datetime_iso: str
+    station_id: str
+    defect_class: str
+    confidence: float
+    bbox: List[int]
+
+class AuditQueryResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    records: List[AuditDefectItem]
+
+class ClassBreakdownItem(BaseModel):
+    class_: str = Field(..., alias="class")
+    count: int
+    avg_confidence: float
+
+class DefectStatsSummary(BaseModel):
+    total_inspections: int
+    clean_inspections: int
+    defective_inspections: int
+    defect_rate_percent: float
+    quality_yield_percent: float
+    mean_inference_ms: float
+    defect_class_breakdown: List[Dict[str, Any]]

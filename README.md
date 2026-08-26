@@ -113,29 +113,38 @@ defect-detection/
 │
 ├── api/
 │   ├── __init__.py
-│   ├── main.py                 # FastAPI app — routes, CORS, startup
-│   ├── inference.py            # Model loading + predict() function
-│   ├── schemas.py              # Pydantic v2 request/response models
-│   └── alerts.py               # Slack webhook with cooldown
+│   ├── main.py                 # FastAPI app — routes, WebSocket, CORS & UI mount
+│   ├── inference.py            # Multi-backend engine (PyTorch .pt + ONNX Runtime)
+│   ├── schemas.py              # Pydantic v2 request/response contracts
+│   ├── alerts.py               # Slack webhook alerting with debouncing
+│   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
+│   ├── drift.py                # Rolling confidence drift monitor & Active Learning queue
+│   ├── mqtt_publisher.py       # Industrial MQTT telemetry for PLC pneumatic reject arms
+│   ├── database.py             # SQLite QA defect audit log & query engine (/audit/defects)
+│   ├── rtsp_stream.py          # Multi-threaded zero-lag RTSP camera ingestion worker
+│   └── config.py               # Environment configuration & dynamic device resolver
 │
-├── mlflow_tracking/
-│   ├── mlruns/                 # MLflow metadata (gitignored)
-│   └── artifacts/              # Logged weights, confusion matrices (gitignored)
+├── scripts/
+│   ├── benchmark_export.py     # Edge latency benchmarker & ONNX optimization exporter
+│   └── stream_simulator.py     # Industrial camera video stream simulator
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # Automated GitHub Actions CI & model validation
 │
 ├── docker/
 │   ├── Dockerfile              # Multi-stage build — builder + slim runtime
 │   └── docker-compose.yml      # api (8000) + mlflow (5000) services
 │
 ├── frontend/
-│   └── index.html              # Upload UI — no framework, no build step
+│   └── index.html              # Modern dark-mode UI with Image, Stream & QA Audit tabs
 │
 ├── tests/
-│   └── test_api.py             # pytest — health, predict, error handling
+│   └── test_api.py             # pytest suite — health, predict, metrics, drift & audit tests
 │
 ├── .env.example                # All environment variables documented
 ├── .gitignore
 ├── requirements.txt            # Pinned production dependencies
-├── requirements-dev.txt        # Adds ruff, mypy, pytest
 └── README.md
 ```
 

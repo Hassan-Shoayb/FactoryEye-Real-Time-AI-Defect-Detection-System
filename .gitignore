@@ -7,11 +7,14 @@ __pycache__/
 # Environment Variables
 .env
 
-# Dataset (too large for GitHub)
+# Dataset & Databases
 dataset/
 data/raw/
 data/processed/
 data/active_learning_queue/
+*.db
+data/*.db
+
 
 
 # YOLO training outputs

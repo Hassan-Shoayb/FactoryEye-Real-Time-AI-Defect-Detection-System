@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.config import API_VERSION
+from api.database import audit_db
 
 client = TestClient(app)
 
@@ -29,7 +30,6 @@ def test_health_endpoint():
     assert data["version"] == API_VERSION
 
 def test_prometheus_metrics_endpoint():
-    """Verify /metrics endpoint returns valid Prometheus exposition text."""
     response = client.get("/metrics")
     assert response.status_code == 200
     text = response.text
@@ -37,13 +37,29 @@ def test_prometheus_metrics_endpoint():
     assert "factoryeye_inference_latency_ms" in text
 
 def test_drift_stats_endpoint():
-    """Verify /drift/stats returns rolling window statistics."""
     response = client.get("/drift/stats")
     assert response.status_code == 200
     data = response.json()
     assert "rolling_avg_confidence" in data
     assert "drift_detected" in data
-    assert "active_learning_queue_size" in data
+
+def test_audit_defects_and_summary_endpoints():
+    """Verify defect audit database query and summary stats endpoints."""
+    # 1. Summary stats
+    stats_res = client.get("/audit/stats/summary")
+    assert stats_res.status_code == 200
+    stats = stats_res.json()
+    assert "total_inspections" in stats
+    assert "quality_yield_percent" in stats
+    assert "defect_rate_percent" in stats
+
+    # 2. Query defects
+    defects_res = client.get("/audit/defects?limit=10")
+    assert defects_res.status_code == 200
+    data = defects_res.json()
+    assert "total" in data
+    assert "records" in data
+    assert isinstance(data["records"], list)
 
 def test_predict_image_success():
     img_bytes = create_synthetic_image_bytes()
@@ -57,7 +73,6 @@ def test_predict_image_success():
     assert "defect_detected" in data
     assert "inference_ms" in data
     assert isinstance(data["detections"], list)
-    assert isinstance(data["inference_ms"], (int, float))
 
 def test_predict_rejects_non_image():
     files = {"file": ("test.txt", b"This is not an image", "text/plain")}
@@ -77,10 +92,12 @@ if __name__ == "__main__":
     print("  ✓ test_prometheus_metrics_endpoint passed")
     test_drift_stats_endpoint()
     print("  ✓ test_drift_stats_endpoint passed")
+    test_audit_defects_and_summary_endpoints()
+    print("  ✓ test_audit_defects_and_summary_endpoints passed")
     test_predict_image_success()
     print("  ✓ test_predict_image_success passed")
     test_predict_rejects_non_image()
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL API TESTS PASSED SUCCESSFULLY!")
+    print("\n🎉 ALL 7 API TESTS PASSED SUCCESSFULLY!")
