@@ -1,5 +1,7 @@
 import sqlite3
 import time
+import io
+import csv
 import json
 import logging
 from pathlib import Path
@@ -69,7 +71,6 @@ class DefectAuditDatabase:
         source: str = "REST API",
         station_id: str = "STATION_01"
     ) -> int:
-        """Logs an inspection event and individual detected defect bounding boxes."""
         now = time.time()
         datetime_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
         
@@ -104,7 +105,6 @@ class DefectAuditDatabase:
         defect_class: Optional[str] = None,
         min_confidence: float = 0.0
     ) -> Tuple[List[Dict], int]:
-        """Queries historical defect records with optional filtering and pagination."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             conditions = ["confidence >= ?"]
@@ -116,11 +116,9 @@ class DefectAuditDatabase:
 
             where_clause = " AND ".join(conditions)
 
-            # Count total matching
             cursor.execute(f"SELECT COUNT(*) FROM defect_records WHERE {where_clause}", params)
             total = cursor.fetchone()[0]
 
-            # Fetch records
             query = f"""
                 SELECT id, inspection_id, timestamp_utc, station_id, defect_class, confidence,
                        bbox_x1, bbox_y1, bbox_x2, bbox_y2
@@ -148,11 +146,8 @@ class DefectAuditDatabase:
             return results, total
 
     def get_summary_stats(self) -> Dict:
-        """Calculates real-time quality assurance line statistics."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # Total inspections
             cursor.execute("SELECT COUNT(*), SUM(defect_detected), AVG(inference_ms) FROM inspection_events")
             row = cursor.fetchone()
             total_inspections = row[0] or 0
@@ -162,7 +157,6 @@ class DefectAuditDatabase:
             defect_rate = round((defective_inspections / total_inspections * 100), 2) if total_inspections > 0 else 0.0
             quality_yield = round(100.0 - defect_rate, 2) if total_inspections > 0 else 100.0
 
-            # Defect breakdown by class
             cursor.execute("""
                 SELECT defect_class, COUNT(*) as count, AVG(confidence) as avg_conf
                 FROM defect_records
@@ -183,5 +177,20 @@ class DefectAuditDatabase:
                 "mean_inference_ms": round(avg_latency, 2),
                 "defect_class_breakdown": class_breakdown
             }
+
+    def export_csv(self) -> str:
+        """Exports complete defect audit trail to CSV format."""
+        records, _ = self.query_defects(limit=10000, offset=0)
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Inspection_ID", "Datetime_UTC", "Station_ID", "Defect_Class", "Confidence", "BBox_X1", "BBox_Y1", "BBox_X2", "BBox_Y2"])
+
+        for r in records:
+            writer.writerow([
+                r["id"], r["inspection_id"], r["datetime_iso"], r["station_id"],
+                r["defect_class"], r["confidence"],
+                r["bbox"][0], r["bbox"][1], r["bbox"][2], r["bbox"][3]
+            ])
+        return output.getvalue()
 
 audit_db = DefectAuditDatabase()

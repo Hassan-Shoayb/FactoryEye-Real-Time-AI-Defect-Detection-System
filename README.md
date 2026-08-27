@@ -115,16 +115,18 @@ defect-detection/
 │   ├── __init__.py
 │   ├── main.py                 # FastAPI app — routes, WebSocket, CORS & UI mount
 │   ├── inference.py            # Multi-backend engine (PyTorch .pt + ONNX Runtime)
+│   ├── explainability.py       # Saliency attention heatmaps & jet colormap overlays (/explain)
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
 │   ├── drift.py                # Rolling confidence drift monitor & Active Learning queue
 │   ├── mqtt_publisher.py       # Industrial MQTT telemetry for PLC pneumatic reject arms
-│   ├── database.py             # SQLite QA defect audit log & query engine (/audit/defects)
+│   ├── database.py             # SQLite QA defect audit log & export engine (/audit/defects)
 │   ├── rtsp_stream.py          # Multi-threaded zero-lag RTSP camera ingestion worker
 │   └── config.py               # Environment configuration & dynamic device resolver
 │
 ├── scripts/
+│   ├── model_gate.py           # Champion vs Challenger model governance & regression gating
 │   ├── benchmark_export.py     # Edge latency benchmarker & ONNX optimization exporter
 │   └── stream_simulator.py     # Industrial camera video stream simulator
 │

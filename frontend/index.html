@@ -85,7 +85,6 @@
         }
         .card-title { font-size: 16px; font-weight: 600; color: var(--text-main); }
         
-        /* Dropzone */
         .dropzone {
             border: 2px dashed var(--border);
             border-radius: 8px;
@@ -101,7 +100,6 @@
         }
         .dropzone p { color: var(--text-muted); margin-top: 8px; font-size: 13px; }
         
-        /* Viewer */
         .viewer {
             position: relative;
             background: #000;
@@ -116,7 +114,6 @@
         .viewer img, .viewer video { max-width: 100%; max-height: 460px; object-fit: contain; }
         .viewer-placeholder { color: var(--text-muted); font-size: 14px; }
         
-        /* Metrics & Results */
         .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
         .metric-box {
             background: rgba(15, 23, 42, 0.6);
@@ -156,12 +153,17 @@
             font-weight: 600;
             cursor: pointer;
             transition: background 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
         .btn:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #475569; }
         .btn-danger { background: var(--danger); }
         .btn-danger:hover { background: #dc2626; }
         
-        /* Table Styles for Audit Tab */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: rgba(15, 23, 42, 0.7); color: var(--text-muted); font-weight: 600; }
@@ -227,7 +229,13 @@
             </div>
 
             <div class="card">
-                <div class="card-title">2. Annotated Defect Bounding Boxes</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="card-title">2. Defect Visualization</div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" id="btnBoundingBox" onclick="toggleView('box')" style="padding: 4px 10px; font-size: 12px;">Bounding Box</button>
+                        <button class="btn btn-secondary" id="btnHeatmap" onclick="toggleView('heatmap')" style="padding: 4px 10px; font-size: 12px;">🔥 Saliency Heatmap</button>
+                    </div>
+                </div>
                 <div class="viewer" id="imageViewer">
                     <div class="viewer-placeholder">Awaiting image upload...</div>
                     <img id="annotatedImage" style="display:none;" />
@@ -302,7 +310,10 @@
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
-                    <button class="btn" onclick="loadAuditLogs()" style="padding: 6px 12px; font-size: 12px;">🔄 Refresh Logs</button>
+                    <div style="display: flex; gap: 8px;">
+                        <a href="/audit/export" class="btn" style="padding: 6px 12px; font-size: 12px;" download>📥 Export CSV</a>
+                        <button class="btn btn-secondary" onclick="loadAuditLogs()" style="padding: 6px 12px; font-size: 12px;">🔄 Refresh Logs</button>
+                    </div>
                 </div>
                 <div style="overflow-x: auto;">
                     <table>
@@ -325,6 +336,10 @@
     </main>
 
     <script>
+        let lastRawFile = null;
+        let lastBoxImg = null;
+        let lastHeatmapImg = null;
+
         function switchTab(tab) {
             document.getElementById('tabImageBtn').classList.toggle('active', tab === 'image');
             document.getElementById('tabVideoBtn').classList.toggle('active', tab === 'video');
@@ -342,6 +357,7 @@
         async function handleImageUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
+            lastRawFile = file;
 
             const formData = new FormData();
             formData.append("file", file);
@@ -367,6 +383,9 @@
                     statusEl.style.color = "var(--success)";
                 }
 
+                lastBoxImg = data.annotated_image;
+                lastHeatmapImg = null;
+
                 const imgEl = document.getElementById('annotatedImage');
                 const placeholder = document.querySelector('#imageViewer .viewer-placeholder');
                 if (data.annotated_image) {
@@ -390,6 +409,26 @@
 
             } catch (err) {
                 alert("Error during detection: " + err.message);
+            }
+        }
+
+        async function toggleView(view) {
+            const imgEl = document.getElementById('annotatedImage');
+            if (view === 'box' && lastBoxImg) {
+                imgEl.src = lastBoxImg;
+            } else if (view === 'heatmap' && lastRawFile) {
+                if (lastHeatmapImg) {
+                    imgEl.src = lastHeatmapImg;
+                } else {
+                    const fd = new FormData();
+                    fd.append("file", lastRawFile);
+                    const res = await fetch("/explain?conf=0.40", { method: "POST", body: fd });
+                    const data = await res.json();
+                    if (data.annotated_image) {
+                        lastHeatmapImg = data.annotated_image;
+                        imgEl.src = lastHeatmapImg;
+                    }
+                }
             }
         }
 

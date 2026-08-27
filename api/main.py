@@ -23,6 +23,7 @@ from api.metrics import metrics_collector
 from api.drift import drift_monitor
 from api.mqtt_publisher import mqtt_publisher
 from api.database import audit_db
+from api.explainability import explainability_engine
 from api.rtsp_stream import RTSPCameraWorker, active_rtsp_workers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -35,13 +36,13 @@ async def lifespan(app: FastAPI):
         engine.load_model()
     logger.info(f"✓ Active model: {engine.model_path} ({engine.backend_type})")
     yield
-    for worker in active_rtsp_workers.values():
+    for worker in list(active_rtsp_workers.values()):
         worker.stop()
     logger.info("🛑 FactoryEye API shutting down...")
 
 app = FastAPI(
     title="FactoryEye — Real-Time AI Defect Detection API",
-    description="Enterprise REST, WebSocket & RTSP Computer Vision platform with Prometheus telemetry and defect audit logging.",
+    description="Enterprise REST, WebSocket & RTSP Computer Vision platform with Prometheus telemetry, explainability heatmaps & QA defect audit logging.",
     version=API_VERSION,
     lifespan=lifespan
 )
@@ -86,7 +87,6 @@ async def get_audit_defects(
     defect_class: str = Query(None, description="Filter by defect class"),
     min_confidence: float = Query(0.0, ge=0.0, le=1.0)
 ):
-    """Queries persistent QA defect inspection records with pagination and class filtering."""
     records, total = audit_db.query_defects(limit, offset, defect_class, min_confidence)
     return AuditQueryResponse(
         total=total,
@@ -97,10 +97,47 @@ async def get_audit_defects(
 
 @app.get("/audit/stats/summary", response_model=DefectStatsSummary, tags=["Audit & QA"])
 async def get_audit_stats_summary():
-    """Returns comprehensive factory line QA metrics (Yield %, Defect Rate %, Class Breakdown)."""
     return audit_db.get_summary_stats()
 
-# ── 5. REST Single Image Inference ──────────────────────────────────────────
+@app.get("/audit/export", tags=["Audit & QA"])
+async def export_audit_records():
+    """Exports complete defect inspection records as a downloadable CSV report."""
+    csv_data = audit_db.export_csv()
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=factoryeye_defect_audit_report.csv"}
+    )
+
+# ── 5. AI Explainability Heatmap ────────────────────────────────────────────
+@app.post("/explain", response_model=PredictResponse, tags=["Explainability"])
+async def explain_defect_image(
+    file: UploadFile = File(..., description="Steel surface image file"),
+    conf: float = Query(CONFIDENCE_THRESHOLD, ge=0.05, le=1.0)
+):
+    """Generates a saliency attention heatmap visualizing defect feature activations."""
+    contents = await file.read()
+    frame = engine.decode_image_bytes(contents)
+    if frame is None:
+        raise HTTPException(status_code=400, detail="Could not decode image.")
+
+    _, detections, inference_ms = await asyncio.to_thread(
+        engine.run_inference, frame, conf, False
+    )
+
+    _, heatmap_b64 = await asyncio.to_thread(
+        explainability_engine.generate_saliency_heatmap, frame, detections
+    )
+
+    return PredictResponse(
+        detections=detections,
+        defect_count=len(detections),
+        defect_detected=len(detections) > 0,
+        inference_ms=inference_ms,
+        annotated_image=heatmap_b64
+    )
+
+# ── 6. REST Single Image Inference ──────────────────────────────────────────
 @app.post("/predict", response_model=PredictResponse, tags=["Inference"])
 async def predict_image(
     file: UploadFile = File(..., description="Steel surface image file (JPEG/PNG)"),
@@ -125,7 +162,6 @@ async def predict_image(
 
     defect_count = len(detections)
 
-    # Telemetry, Drift & Audit Logging
     metrics_collector.record_inference(inference_ms, detections)
     drift_monitor.analyze_predictions(frame, detections)
     audit_db.log_inspection(defect_count, detections, inference_ms, source=f"Image: {file.filename}", station_id=station_id)
@@ -152,7 +188,7 @@ async def predict_image(
         annotated_image=annotated_b64
     )
 
-# ── 6. REST Video Clip Inspection ───────────────────────────────────────────
+# ── 7. REST Video Clip Inspection ───────────────────────────────────────────
 @app.post("/predict-video", response_model=VideoPredictResponse, tags=["Inference"])
 async def predict_video(
     file: UploadFile = File(..., description="Video clip (MP4, AVI, MOV)"),
@@ -215,7 +251,7 @@ async def predict_video(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-# ── 7. Live WebSocket Camera Streaming ──────────────────────────────────────
+# ── 8. Live WebSocket Camera Streaming ──────────────────────────────────────
 @app.websocket("/ws/stream")
 async def websocket_video_stream(websocket: WebSocket):
     await websocket.accept()
@@ -261,7 +297,7 @@ async def websocket_video_stream(websocket: WebSocket):
         metrics_collector.stream_disconnected()
         logger.error(f"WebSocket error: {e}")
 
-# ── 8. Operator Web Frontend Static Mount ───────────────────────────────────
+# ── 9. Operator Web Frontend Static Mount ───────────────────────────────────
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 if FRONTEND_DIR.exists():
     @app.get("/", include_in_schema=False)

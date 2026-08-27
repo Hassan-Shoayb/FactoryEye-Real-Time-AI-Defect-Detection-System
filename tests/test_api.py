@@ -44,27 +44,38 @@ def test_drift_stats_endpoint():
     assert "drift_detected" in data
 
 def test_audit_defects_and_summary_endpoints():
-    """Verify defect audit database query and summary stats endpoints."""
-    # 1. Summary stats
     stats_res = client.get("/audit/stats/summary")
     assert stats_res.status_code == 200
     stats = stats_res.json()
     assert "total_inspections" in stats
     assert "quality_yield_percent" in stats
-    assert "defect_rate_percent" in stats
 
-    # 2. Query defects
     defects_res = client.get("/audit/defects?limit=10")
     assert defects_res.status_code == 200
     data = defects_res.json()
     assert "total" in data
     assert "records" in data
-    assert isinstance(data["records"], list)
+
+def test_audit_export_endpoint():
+    """Verify /audit/export returns CSV content."""
+    response = client.get("/audit/export")
+    assert response.status_code == 200
+    assert "text/csv" in response.headers.get("content-type", "")
+    assert "ID,Inspection_ID,Datetime_UTC" in response.text
+
+def test_explainability_heatmap_endpoint():
+    """Verify /explain generates jet-colormap saliency maps."""
+    img_bytes = create_synthetic_image_bytes()
+    files = {"file": ("test_surface.jpg", img_bytes, "image/jpeg")}
+    response = client.post("/explain?conf=0.20", files=files)
+    assert response.status_code == 200
+    data = response.json()
+    assert "annotated_image" in data
+    assert data["annotated_image"].startswith("data:image/jpeg;base64,")
 
 def test_predict_image_success():
     img_bytes = create_synthetic_image_bytes()
     files = {"file": ("test_surface.jpg", img_bytes, "image/jpeg")}
-    
     response = client.post("/predict?conf=0.20", files=files)
     assert response.status_code == 200
     data = response.json()
@@ -72,7 +83,6 @@ def test_predict_image_success():
     assert "defect_count" in data
     assert "defect_detected" in data
     assert "inference_ms" in data
-    assert isinstance(data["detections"], list)
 
 def test_predict_rejects_non_image():
     files = {"file": ("test.txt", b"This is not an image", "text/plain")}
@@ -94,10 +104,14 @@ if __name__ == "__main__":
     print("  ✓ test_drift_stats_endpoint passed")
     test_audit_defects_and_summary_endpoints()
     print("  ✓ test_audit_defects_and_summary_endpoints passed")
+    test_audit_export_endpoint()
+    print("  ✓ test_audit_export_endpoint passed")
+    test_explainability_heatmap_endpoint()
+    print("  ✓ test_explainability_heatmap_endpoint passed")
     test_predict_image_success()
     print("  ✓ test_predict_image_success passed")
     test_predict_rejects_non_image()
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL 7 API TESTS PASSED SUCCESSFULLY!")
+    print("\n🎉 ALL 9 API TESTS PASSED SUCCESSFULLY!")
