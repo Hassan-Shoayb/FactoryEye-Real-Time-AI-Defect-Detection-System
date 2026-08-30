@@ -15,6 +15,7 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
     volumes:
       - ../training/runs:/app/training/runs
+      - ../data:/app/data
     restart: unless-stopped
     depends_on:
       - mlflow

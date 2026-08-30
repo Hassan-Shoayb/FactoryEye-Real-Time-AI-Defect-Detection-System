@@ -36,3 +36,8 @@ jobs:
       - name: Verify Model Loading & Liveness
         run: |
           python -c "from api.inference import engine; assert engine.model_loaded, 'Model must load successfully'"
+
+      - name: Test Model Governance & SLA Gate
+        run: |
+          python scripts/model_gate.py --champion yolov8n.pt --challenger yolov8n.pt --max-latency 100.0
+

@@ -30,6 +30,8 @@ ENV PATH=/root/.local/bin:$PATH
 COPY api/ api/
 COPY frontend/ frontend/
 COPY training/ training/
+COPY scripts/ scripts/
+COPY data/ data/
 COPY .env.example .env
 
 EXPOSE 8000
