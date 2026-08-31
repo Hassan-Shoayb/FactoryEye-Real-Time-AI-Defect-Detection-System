@@ -128,6 +128,8 @@ defect-detection/
 ├── scripts/
 │   ├── model_gate.py           # Champion vs Challenger model governance & regression gating
 │   ├── benchmark_export.py     # Edge latency benchmarker & ONNX optimization exporter
+│   ├── batch_predict.py        # High-throughput offline batch folder inference CLI
+│   ├── generate_synthetic.py   # Procedural synthetic metal defect generator
 │   └── stream_simulator.py     # Industrial camera video stream simulator
 │
 ├── .github/
@@ -144,6 +146,7 @@ defect-detection/
 ├── tests/
 │   └── test_api.py             # pytest suite — health, predict, metrics, drift & audit tests
 │
+├── Makefile                    # Developer task runner (run, test, benchmark, gate, batch)
 ├── .env.example                # All environment variables documented
 ├── .gitignore
 ├── requirements.txt            # Pinned production dependencies
