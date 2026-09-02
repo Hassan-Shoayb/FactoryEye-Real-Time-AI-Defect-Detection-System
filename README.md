@@ -117,6 +117,7 @@ defect-detection/
 │   ├── inference.py            # Multi-backend engine (PyTorch .pt + ONNX Runtime)
 │   ├── explainability.py       # Saliency attention heatmaps & jet colormap overlays (/explain)
 │   ├── severity.py             # Defect severity grading & QA action recommendation engine
+│   ├── certificate.py          # ISO Metallurgical quality inspection certificate generator (/audit/certificate)
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)

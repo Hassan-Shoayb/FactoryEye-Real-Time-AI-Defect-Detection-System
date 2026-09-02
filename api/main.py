@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 import cv2
 from fastapi import FastAPI, File, UploadFile, Query, WebSocket, WebSocketDisconnect, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.config import API_VERSION, CONFIDENCE_THRESHOLD, MODEL_PATH, DEVICE
@@ -25,6 +25,7 @@ from api.mqtt_publisher import mqtt_publisher
 from api.database import audit_db
 from api.explainability import explainability_engine
 from api.severity import severity_engine
+from api.certificate import certificate_generator
 from api.rtsp_stream import RTSPCameraWorker, active_rtsp_workers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -108,6 +109,13 @@ async def export_audit_records():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=factoryeye_defect_audit_report.csv"}
     )
+
+@app.get("/audit/certificate", response_class=HTMLResponse, tags=["Audit & QA"])
+async def generate_quality_certificate(batch_id: str = Query("BATCH-2026-NEU-01")):
+    """Generates a printable ISO-standard metallurgical quality inspection compliance certificate."""
+    stats = audit_db.get_summary_stats()
+    html_content = certificate_generator.generate_html_certificate(stats, batch_id=batch_id)
+    return HTMLResponse(content=html_content)
 
 # ── 5. AI Explainability Heatmap ────────────────────────────────────────────
 @app.post("/explain", response_model=PredictResponse, tags=["Explainability"])

@@ -62,6 +62,13 @@ def test_audit_export_endpoint():
     assert "text/csv" in response.headers.get("content-type", "")
     assert "ID,Inspection_ID,Datetime_UTC" in response.text
 
+def test_quality_certificate_endpoint():
+    """Verify /audit/certificate returns printable compliance sheet."""
+    response = client.get("/audit/certificate?batch_id=TEST-BATCH-01")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    assert "FactoryEye Quality Compliance Certificate" in response.text
+
 def test_explainability_heatmap_endpoint():
     img_bytes = create_synthetic_image_bytes()
     files = {"file": ("test_surface.jpg", img_bytes, "image/jpeg")}
@@ -110,6 +117,8 @@ if __name__ == "__main__":
     print("  ✓ test_audit_defects_and_summary_endpoints passed")
     test_audit_export_endpoint()
     print("  ✓ test_audit_export_endpoint passed")
+    test_quality_certificate_endpoint()
+    print("  ✓ test_quality_certificate_endpoint passed")
     test_explainability_heatmap_endpoint()
     print("  ✓ test_explainability_heatmap_endpoint passed")
     test_predict_image_success()
@@ -118,4 +127,4 @@ if __name__ == "__main__":
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL 9 API TESTS PASSED SUCCESSFULLY!")
+    print("\n🎉 ALL 10 API TESTS PASSED SUCCESSFULLY!")
