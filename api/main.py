@@ -24,6 +24,7 @@ from api.drift import drift_monitor
 from api.mqtt_publisher import mqtt_publisher
 from api.database import audit_db
 from api.explainability import explainability_engine
+from api.severity import severity_engine
 from api.rtsp_stream import RTSPCameraWorker, active_rtsp_workers
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="FactoryEye — Real-Time AI Defect Detection API",
-    description="Enterprise REST, WebSocket & RTSP Computer Vision platform with Prometheus telemetry, explainability heatmaps & QA defect audit logging.",
+    description="Enterprise REST, WebSocket & RTSP Computer Vision platform with Prometheus telemetry, explainability heatmaps, defect severity grading & QA audit logging.",
     version=API_VERSION,
     lifespan=lifespan
 )
@@ -101,7 +102,6 @@ async def get_audit_stats_summary():
 
 @app.get("/audit/export", tags=["Audit & QA"])
 async def export_audit_records():
-    """Exports complete defect inspection records as a downloadable CSV report."""
     csv_data = audit_db.export_csv()
     return Response(
         content=csv_data,
@@ -115,7 +115,6 @@ async def explain_defect_image(
     file: UploadFile = File(..., description="Steel surface image file"),
     conf: float = Query(CONFIDENCE_THRESHOLD, ge=0.05, le=1.0)
 ):
-    """Generates a saliency attention heatmap visualizing defect feature activations."""
     contents = await file.read()
     frame = engine.decode_image_bytes(contents)
     if frame is None:
@@ -129,10 +128,16 @@ async def explain_defect_image(
         explainability_engine.generate_saliency_heatmap, frame, detections
     )
 
+    severity_info = severity_engine.evaluate_severity(frame.shape, detections)
+
     return PredictResponse(
         detections=detections,
         defect_count=len(detections),
         defect_detected=len(detections) > 0,
+        severity_grade=severity_info["severity_grade"],
+        severity_score=severity_info["severity_score"],
+        defect_coverage_percent=severity_info["defect_coverage_percent"],
+        action_recommendation=severity_info["action_recommendation"],
         inference_ms=inference_ms,
         annotated_image=heatmap_b64
     )
@@ -161,6 +166,7 @@ async def predict_image(
     )
 
     defect_count = len(detections)
+    severity_info = severity_engine.evaluate_severity(frame.shape, detections)
 
     metrics_collector.record_inference(inference_ms, detections)
     drift_monitor.analyze_predictions(frame, detections)
@@ -184,6 +190,10 @@ async def predict_image(
         detections=detections,
         defect_count=defect_count,
         defect_detected=defect_count > 0,
+        severity_grade=severity_info["severity_grade"],
+        severity_score=severity_info["severity_score"],
+        defect_coverage_percent=severity_info["defect_coverage_percent"],
+        action_recommendation=severity_info["action_recommendation"],
         inference_ms=inference_ms,
         annotated_image=annotated_b64
     )

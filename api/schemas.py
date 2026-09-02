@@ -10,6 +10,10 @@ class PredictResponse(BaseModel):
     detections: List[Detection] = Field(default_factory=list, description="List of detected defects")
     defect_count: int = Field(..., ge=0, description="Total number of defects detected")
     defect_detected: bool = Field(..., description="True if one or more defects were found")
+    severity_grade: str = Field(default="NONE", description="Severity category: NONE, MINOR, MAJOR, CRITICAL")
+    severity_score: float = Field(default=0.0, description="Composite defect severity index (0-100)")
+    defect_coverage_percent: float = Field(default=0.0, description="Surface area coverage percentage")
+    action_recommendation: str = Field(default="PASS", description="Recommended shop-floor QA action (PASS, REWORK, SCRAP)")
     inference_ms: float = Field(..., ge=0.0, description="Inference latency in milliseconds")
     annotated_image: Optional[str] = Field(None, description="Base64 data URL of the annotated image with bounding boxes")
 

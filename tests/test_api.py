@@ -57,20 +57,20 @@ def test_audit_defects_and_summary_endpoints():
     assert "records" in data
 
 def test_audit_export_endpoint():
-    """Verify /audit/export returns CSV content."""
     response = client.get("/audit/export")
     assert response.status_code == 200
     assert "text/csv" in response.headers.get("content-type", "")
     assert "ID,Inspection_ID,Datetime_UTC" in response.text
 
 def test_explainability_heatmap_endpoint():
-    """Verify /explain generates jet-colormap saliency maps."""
     img_bytes = create_synthetic_image_bytes()
     files = {"file": ("test_surface.jpg", img_bytes, "image/jpeg")}
     response = client.post("/explain?conf=0.20", files=files)
     assert response.status_code == 200
     data = response.json()
     assert "annotated_image" in data
+    assert "severity_grade" in data
+    assert "action_recommendation" in data
     assert data["annotated_image"].startswith("data:image/jpeg;base64,")
 
 def test_predict_image_success():
@@ -82,6 +82,10 @@ def test_predict_image_success():
     assert "detections" in data
     assert "defect_count" in data
     assert "defect_detected" in data
+    assert "severity_grade" in data
+    assert "severity_score" in data
+    assert "defect_coverage_percent" in data
+    assert "action_recommendation" in data
     assert "inference_ms" in data
 
 def test_predict_rejects_non_image():
