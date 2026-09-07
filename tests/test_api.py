@@ -62,6 +62,16 @@ def test_audit_export_endpoint():
     assert "text/csv" in response.headers.get("content-type", "")
     assert "ID,Inspection_ID,Datetime_UTC" in response.text
 
+def test_audit_defect_trends_endpoint():
+    """Verify /audit/stats/trends returns Pareto and hourly velocity analytics."""
+    response = client.get("/audit/stats/trends")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_defects_recorded" in data
+    assert "pareto_class_distribution" in data
+    assert "hourly_defect_velocity" in data
+    assert isinstance(data["pareto_class_distribution"], list)
+
 def test_quality_certificate_endpoint():
     """Verify /audit/certificate returns printable compliance sheet."""
     response = client.get("/audit/certificate?batch_id=TEST-BATCH-01")
@@ -117,6 +127,8 @@ if __name__ == "__main__":
     print("  ✓ test_audit_defects_and_summary_endpoints passed")
     test_audit_export_endpoint()
     print("  ✓ test_audit_export_endpoint passed")
+    test_audit_defect_trends_endpoint()
+    print("  ✓ test_audit_defect_trends_endpoint passed")
     test_quality_certificate_endpoint()
     print("  ✓ test_quality_certificate_endpoint passed")
     test_explainability_heatmap_endpoint()
@@ -127,4 +139,4 @@ if __name__ == "__main__":
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL 10 API TESTS PASSED SUCCESSFULLY!")
+    print("\n🎉 ALL 11 API TESTS PASSED SUCCESSFULLY!")

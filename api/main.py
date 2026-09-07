@@ -117,6 +117,11 @@ async def generate_quality_certificate(batch_id: str = Query("BATCH-2026-NEU-01"
     html_content = certificate_generator.generate_html_certificate(stats, batch_id=batch_id)
     return HTMLResponse(content=html_content)
 
+@app.get("/audit/stats/trends", tags=["Audit & QA"])
+async def get_audit_defect_trends():
+    """Returns Pareto defect distribution and hourly velocity analytics for yield loss analysis."""
+    return audit_db.get_defect_trends()
+
 # ── 5. AI Explainability Heatmap ────────────────────────────────────────────
 @app.post("/explain", response_model=PredictResponse, tags=["Explainability"])
 async def explain_defect_image(

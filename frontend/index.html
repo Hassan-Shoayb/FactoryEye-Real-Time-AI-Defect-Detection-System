@@ -330,6 +330,14 @@
                 </div>
             </div>
 
+            <!-- Pareto Yield Loss Card -->
+            <div class="card">
+                <div class="card-title">Defect Pareto Yield Loss Distribution</div>
+                <div id="paretoContainer" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 12px;">Loading Pareto distribution...</div>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -472,17 +480,37 @@
 
         async function loadAuditLogs() {
             try {
-                const [statsRes, logsRes] = await Promise.all([
+                const [statsRes, logsRes, trendsRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
-                    fetch("/audit/defects?limit=25")
+                    fetch("/audit/defects?limit=25"),
+                    fetch("/audit/stats/trends")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
+                const trends = await trendsRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
                 document.getElementById('auditDefectRate').innerText = stats.defect_rate_percent + "%";
                 document.getElementById('auditAvgLatency').innerText = stats.mean_inference_ms + " ms";
+
+                // Populate Pareto Distribution
+                const paretoEl = document.getElementById('paretoContainer');
+                if (trends.pareto_class_distribution && trends.pareto_class_distribution.length > 0) {
+                    paretoEl.innerHTML = trends.pareto_class_distribution.map(p => `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                                <span style="font-weight: 600; text-transform: uppercase;">${p.class}</span>
+                                <span style="font-family: monospace; color: var(--text-muted);">${p.count} incidents (${p.percentage_share}%)</span>
+                            </div>
+                            <div style="width: 100%; height: 8px; background: rgba(15, 23, 42, 0.6); border-radius: 4px; overflow: hidden;">
+                                <div style="width: ${p.percentage_share}%; height: 100%; background: var(--accent); border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    paretoEl.innerHTML = `<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 12px;">No defect records logged yet to compute Pareto distribution.</div>`;
+                }
 
                 const tbody = document.getElementById('auditTableBody');
                 if (logs.records && logs.records.length > 0) {

@@ -178,6 +178,58 @@ class DefectAuditDatabase:
                 "defect_class_breakdown": class_breakdown
             }
 
+    def get_defect_trends(self) -> Dict:
+        """
+        Computes defect frequency breakdown and Pareto distribution percentages
+        across all logged defects for quality root-cause analysis.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM defect_records")
+            total_defects = cursor.fetchone()[0] or 0
+
+            cursor.execute("""
+                SELECT defect_class, COUNT(*) as count, AVG(confidence) as avg_conf
+                FROM defect_records
+                GROUP BY defect_class
+                ORDER BY count DESC
+            """)
+            rows = cursor.fetchall()
+
+            pareto_data = []
+            cumulative = 0
+            for r in rows:
+                count = r["count"]
+                cumulative += count
+                percentage = round((count / total_defects * 100.0), 2) if total_defects > 0 else 0.0
+                cum_pct = round((cumulative / total_defects * 100.0), 2) if total_defects > 0 else 0.0
+                pareto_data.append({
+                    "class": r["defect_class"],
+                    "count": count,
+                    "avg_confidence": round(r["avg_conf"], 4),
+                    "percentage_share": percentage,
+                    "cumulative_percentage": cum_pct
+                })
+
+            cursor.execute("""
+                SELECT strftime('%Y-%m-%d %H:00', datetime(timestamp_utc, 'unixepoch')) as hour_bin,
+                       COUNT(*) as count
+                FROM defect_records
+                GROUP BY hour_bin
+                ORDER BY hour_bin DESC
+                LIMIT 24
+            """)
+            hourly_velocity = [
+                {"hour": r["hour_bin"], "defects": r["count"]}
+                for r in cursor.fetchall()
+            ]
+
+            return {
+                "total_defects_recorded": total_defects,
+                "pareto_class_distribution": pareto_data,
+                "hourly_defect_velocity": hourly_velocity
+            }
+
     def export_csv(self) -> str:
         """Exports complete defect audit trail to CSV format."""
         records, _ = self.query_defects(limit=10000, offset=0)
