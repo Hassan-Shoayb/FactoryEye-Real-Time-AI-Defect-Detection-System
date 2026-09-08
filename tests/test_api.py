@@ -72,6 +72,16 @@ def test_audit_defect_trends_endpoint():
     assert "hourly_defect_velocity" in data
     assert isinstance(data["pareto_class_distribution"], list)
 
+def test_audit_stations_endpoint():
+    """Verify /audit/stations returns station breakdown."""
+    response = client.get("/audit/stations")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    if len(data) > 0:
+        assert "station_id" in data[0]
+        assert "quality_yield_percent" in data[0]
+
 def test_quality_certificate_endpoint():
     """Verify /audit/certificate returns printable compliance sheet."""
     response = client.get("/audit/certificate?batch_id=TEST-BATCH-01")
@@ -129,6 +139,8 @@ if __name__ == "__main__":
     print("  ✓ test_audit_export_endpoint passed")
     test_audit_defect_trends_endpoint()
     print("  ✓ test_audit_defect_trends_endpoint passed")
+    test_audit_stations_endpoint()
+    print("  ✓ test_audit_stations_endpoint passed")
     test_quality_certificate_endpoint()
     print("  ✓ test_quality_certificate_endpoint passed")
     test_explainability_heatmap_endpoint()
@@ -139,4 +151,4 @@ if __name__ == "__main__":
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL 11 API TESTS PASSED SUCCESSFULLY!")
+    print("\n🎉 ALL 12 API TESTS PASSED SUCCESSFULLY!")

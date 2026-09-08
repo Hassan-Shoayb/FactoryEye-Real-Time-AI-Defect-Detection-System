@@ -123,7 +123,7 @@ defect-detection/
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
 │   ├── drift.py                # Rolling confidence drift monitor & Active Learning queue
 │   ├── mqtt_publisher.py       # Industrial MQTT telemetry for PLC pneumatic reject arms
-│   ├── database.py             # SQLite QA defect audit log, Pareto trends & export engine (/audit/defects, /audit/stats/trends)
+│   ├── database.py             # SQLite QA defect audit log, Pareto trends & multi-station telemetry (/audit/defects, /audit/stations)
 │   ├── rtsp_stream.py          # Multi-threaded zero-lag RTSP camera ingestion worker
 │   └── config.py               # Environment configuration & dynamic device resolver
 │

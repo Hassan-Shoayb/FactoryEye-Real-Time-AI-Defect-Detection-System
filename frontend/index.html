@@ -330,6 +330,28 @@
                 </div>
             </div>
 
+            <!-- Multi-Station Line Quality Card -->
+            <div class="card">
+                <div class="card-title">Continuous Rolling Line — Multi-Station Quality Overview</div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Station ID</th>
+                                <th>Total Inspected</th>
+                                <th>Defective</th>
+                                <th>Defect Rate %</th>
+                                <th>Quality Yield %</th>
+                                <th>Mean Latency</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stationTableBody">
+                            <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading station metrics...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Pareto Yield Loss Card -->
             <div class="card">
                 <div class="card-title">Defect Pareto Yield Loss Distribution</div>
@@ -341,7 +363,13 @@
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="stationFilter" onchange="loadAuditLogs()" style="background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 12px;">
+                            <option value="">All Stations</option>
+                            <option value="STATION_01">STATION_01 (Image Ingest)</option>
+                            <option value="CAMERA_01">CAMERA_01 (Live Stream)</option>
+                            <option value="VIDEO_LINE_01">VIDEO_LINE_01 (Video Batch)</option>
+                        </select>
                         <a href="/audit/certificate?batch_id=BATCH-2026-COIL-A" target="_blank" class="btn" style="padding: 6px 12px; font-size: 12px; background: #059669;">📄 Quality Certificate</a>
                         <a href="/audit/export" class="btn" style="padding: 6px 12px; font-size: 12px;" download>📥 Export CSV</a>
                         <button class="btn btn-secondary" onclick="loadAuditLogs()" style="padding: 6px 12px; font-size: 12px;">🔄 Refresh Logs</button>
@@ -480,19 +508,41 @@
 
         async function loadAuditLogs() {
             try {
-                const [statsRes, logsRes, trendsRes] = await Promise.all([
+                const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
+                const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
+
+                const [statsRes, logsRes, trendsRes, stationsRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
-                    fetch("/audit/defects?limit=25"),
-                    fetch("/audit/stats/trends")
+                    fetch(defectsUrl),
+                    fetch("/audit/stats/trends"),
+                    fetch("/audit/stations")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
                 const trends = await trendsRes.json();
+                const stations = await stationsRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
                 document.getElementById('auditDefectRate').innerText = stats.defect_rate_percent + "%";
                 document.getElementById('auditAvgLatency').innerText = stats.mean_inference_ms + " ms";
+
+                // Populate Multi-Station Table
+                const stationTbody = document.getElementById('stationTableBody');
+                if (stations && stations.length > 0) {
+                    stationTbody.innerHTML = stations.map(s => `
+                        <tr>
+                            <td><span style="font-weight: 600;">${s.station_id}</span></td>
+                            <td>${s.total_inspections}</td>
+                            <td>${s.defective_inspections}</td>
+                            <td style="color: ${s.defect_rate_percent > 0 ? 'var(--danger)' : 'var(--success)'};">${s.defect_rate_percent}%</td>
+                            <td style="font-weight: 700; color: ${s.quality_yield_percent >= 90 ? 'var(--success)' : 'var(--warning)'};">${s.quality_yield_percent}%</td>
+                            <td style="font-family: monospace;">${s.mean_inference_ms} ms</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    stationTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No inspection stations active yet.</td></tr>`;
+                }
 
                 // Populate Pareto Distribution
                 const paretoEl = document.getElementById('paretoContainer');

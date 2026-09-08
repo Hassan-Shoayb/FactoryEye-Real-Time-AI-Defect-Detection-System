@@ -87,9 +87,10 @@ async def get_audit_defects(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     defect_class: str = Query(None, description="Filter by defect class"),
-    min_confidence: float = Query(0.0, ge=0.0, le=1.0)
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+    station_id: str = Query(None, description="Filter by inspection station ID")
 ):
-    records, total = audit_db.query_defects(limit, offset, defect_class, min_confidence)
+    records, total = audit_db.query_defects(limit, offset, defect_class, min_confidence, station_id)
     return AuditQueryResponse(
         total=total,
         limit=limit,
@@ -100,6 +101,16 @@ async def get_audit_defects(
 @app.get("/audit/stats/summary", response_model=DefectStatsSummary, tags=["Audit & QA"])
 async def get_audit_stats_summary():
     return audit_db.get_summary_stats()
+
+@app.get("/audit/stations", tags=["Audit & QA"])
+async def get_station_statistics():
+    """Returns manufacturing line quality breakdown aggregated per inspection station."""
+    return audit_db.get_station_stats()
+
+@app.get("/audit/stats/trends", tags=["Audit & QA"])
+async def get_audit_defect_trends():
+    """Returns Pareto defect distribution and hourly velocity analytics for yield loss analysis."""
+    return audit_db.get_defect_trends()
 
 @app.get("/audit/export", tags=["Audit & QA"])
 async def export_audit_records():
@@ -116,11 +127,6 @@ async def generate_quality_certificate(batch_id: str = Query("BATCH-2026-NEU-01"
     stats = audit_db.get_summary_stats()
     html_content = certificate_generator.generate_html_certificate(stats, batch_id=batch_id)
     return HTMLResponse(content=html_content)
-
-@app.get("/audit/stats/trends", tags=["Audit & QA"])
-async def get_audit_defect_trends():
-    """Returns Pareto defect distribution and hourly velocity analytics for yield loss analysis."""
-    return audit_db.get_defect_trends()
 
 # ── 5. AI Explainability Heatmap ────────────────────────────────────────────
 @app.post("/explain", response_model=PredictResponse, tags=["Explainability"])

@@ -103,7 +103,8 @@ class DefectAuditDatabase:
         limit: int = 50,
         offset: int = 0,
         defect_class: Optional[str] = None,
-        min_confidence: float = 0.0
+        min_confidence: float = 0.0,
+        station_id: Optional[str] = None
     ) -> Tuple[List[Dict], int]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -113,6 +114,10 @@ class DefectAuditDatabase:
             if defect_class:
                 conditions.append("defect_class = ?")
                 params.append(defect_class)
+
+            if station_id:
+                conditions.append("station_id = ?")
+                params.append(station_id)
 
             where_clause = " AND ".join(conditions)
 
@@ -229,6 +234,43 @@ class DefectAuditDatabase:
                 "pareto_class_distribution": pareto_data,
                 "hourly_defect_velocity": hourly_velocity
             }
+
+    def get_station_stats(self) -> List[Dict]:
+        """
+        Computes station-level manufacturing quality statistics, total throughput,
+        defect rate, and yield percentages across all active stations.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    station_id,
+                    COUNT(*) as total_inspections,
+                    SUM(defect_detected) as defective_inspections,
+                    AVG(inference_ms) as avg_latency
+                FROM inspection_events
+                GROUP BY station_id
+                ORDER BY total_inspections DESC
+            """)
+            rows = cursor.fetchall()
+            
+            station_results = []
+            for r in rows:
+                total = r["total_inspections"] or 0
+                defective = r["defective_inspections"] or 0
+                defect_rate = round((defective / total * 100.0), 2) if total > 0 else 0.0
+                quality_yield = round(100.0 - defect_rate, 2) if total > 0 else 100.0
+                
+                station_results.append({
+                    "station_id": r["station_id"],
+                    "total_inspections": total,
+                    "clean_inspections": total - defective,
+                    "defective_inspections": defective,
+                    "defect_rate_percent": defect_rate,
+                    "quality_yield_percent": quality_yield,
+                    "mean_inference_ms": round(r["avg_latency"] or 0.0, 2)
+                })
+            return station_results
 
     def export_csv(self) -> str:
         """Exports complete defect audit trail to CSV format."""
