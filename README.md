@@ -435,6 +435,52 @@ curl -X POST http://localhost:8000/predict-video \
 
 ---
 
+### `GET /active-learning/queue`
+
+Fetches candidate ambiguous defect samples ($0.30 \le \text{confidence} \le 0.55$) automatically sequestered during live factory inspection.
+
+```bash
+curl http://localhost:8000/active-learning/queue?limit=50
+```
+
+**Response:**
+```json
+[
+  {
+    "filename": "sample_1788814279327_conf_48.jpg",
+    "filepath": "/path/to/data/active_learning_queue/sample_1788814279327_conf_48.jpg",
+    "confidence_estimate": 0.48,
+    "timestamp_utc": 1788814279.327
+  }
+]
+```
+
+---
+
+### `POST /active-learning/review`
+
+Submits human verification decisions (`approve`, `relabel`, `discard`). Approved and relabeled samples are automatically promoted to `data/curated_training_set/images/` and tagged in `data/curated_training_set/labels/` for next-generation model fine-tuning.
+
+```bash
+curl -X POST http://localhost:8000/active-learning/review \
+  -H "Content-Type: application/json" \
+  -d '{"filename": "sample_1788814279327_conf_48.jpg", "action": "approve", "verified_class": "scratches"}'
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "action": "approve",
+  "filename": "sample_1788814279327_conf_48.jpg",
+  "promoted_to": "data/curated_training_set/images/sample_1788814279327_conf_48.jpg",
+  "verified_class": "scratches",
+  "remaining_queue_size": 4
+}
+```
+
+---
+
 ## MLflow Experiment Tracking
 
 Every training run is automatically logged. To compare runs:
@@ -490,18 +536,35 @@ docker compose up --build --force-recreate
 
 ## Running Tests
 
+FactoryEye includes an end-to-end integration and API verification suite testing all 16 endpoints and subsystems:
+
 ```bash
-pytest tests/ -v
+make test
+# Or: python3 tests/test_api.py
 ```
 
 Expected output:
 
 ```
-tests/test_api.py::test_health           PASSED
-tests/test_api.py::test_predict_image    PASSED
-tests/test_api.py::test_predict_rejects_non_image  PASSED
+Running FactoryEye API Tests...
+  ✓ test_health_endpoint passed
+  ✓ test_prometheus_metrics_endpoint passed
+  ✓ test_drift_stats_endpoint passed
+  ✓ test_audit_defects_and_summary_endpoints passed
+  ✓ test_audit_export_endpoint passed
+  ✓ test_audit_defect_trends_endpoint passed
+  ✓ test_audit_stations_endpoint passed
+  ✓ test_system_hardware_info_endpoint passed
+  ✓ test_defect_roi_crop_endpoint passed
+  ✓ test_quality_certificate_endpoint passed
+  ✓ test_explainability_heatmap_endpoint passed
+  ✓ test_predict_image_success passed
+  ✓ test_predict_rejects_non_image passed
+  ✓ test_predict_rejects_empty_file passed
+  ✓ test_active_learning_queue_endpoint passed
+  ✓ test_active_learning_review_endpoint passed
 
-3 passed in 2.41s
+🎉 ALL 16 API TESTS PASSED SUCCESSFULLY!
 ```
 
 Tests use FastAPI's `TestClient` — no server needs to be running.
@@ -534,12 +597,16 @@ docker run -p 8000:8000 --env-file .env yourdockerhubname/factoryeye:latest
 
 ## Roadmap
 
-- [ ] Automated retraining pipeline triggered by confidence score drift
-- [ ] Prometheus metrics endpoint for production monitoring
+- [x] Automated retraining dataset promotion & Active Learning human-in-the-loop curation queue
+- [x] Prometheus metrics endpoint (`/metrics`) for production monitoring
+- [x] CI/CD pipeline with GitHub Actions (`.github/workflows/ci.yml`)
+- [x] Multi-station yield analytics, Pareto charts & flaw thumbnail crop service
+- [x] Saliency attention explainability heatmaps (`/explain`)
+- [x] ISO Metallurgical Quality Compliance Certificate generator (`/audit/certificate`)
+- [x] Champion vs Challenger SLA model regression gating (`scripts/model_gate.py`)
+- [x] Support for RTSP camera streams (`api/rtsp_stream.py`)
 - [ ] S3 artifact backend for MLflow (replacing local filesystem)
-- [ ] CI/CD pipeline with GitHub Actions — run tests on every push
-- [ ] A/B testing between model versions in production traffic
-- [ ] Support for RTSP camera streams (IP cameras)
+- [ ] A/B canary testing between model versions in production traffic
 
 ---
 

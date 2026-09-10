@@ -5,6 +5,7 @@ import tempfile
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
+from typing import List, Optional, Dict
 
 import cv2
 from fastapi import FastAPI, File, UploadFile, Query, WebSocket, WebSocketDisconnect, HTTPException, Response
@@ -15,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from api.config import API_VERSION, CONFIDENCE_THRESHOLD, MODEL_PATH, DEVICE
 from api.schemas import (
     PredictResponse, VideoPredictResponse, VideoFrameResult, HealthResponse, Detection,
-    AuditQueryResponse, DefectStatsSummary
+    AuditQueryResponse, DefectStatsSummary, ActiveLearningSample, ActiveLearningReviewRequest
 )
 from api.inference import engine
 from api.alerts import alert_manager
@@ -104,6 +105,27 @@ async def get_system_hardware_info():
 @app.get("/drift/stats", tags=["MLOps"])
 async def drift_statistics():
     return drift_monitor.get_stats()
+
+@app.get("/active-learning/queue", response_model=List[ActiveLearningSample], tags=["MLOps"])
+async def get_active_learning_queue(limit: int = Query(50, ge=1, le=200)):
+    """Lists ambiguous defect candidate samples awaiting human verification."""
+    return drift_monitor.get_queued_samples(limit=limit)
+
+@app.get("/active-learning/sample/{filename}", tags=["MLOps"])
+async def get_active_learning_sample_image(filename: str):
+    """Serves the raw image of an active learning sample for human inspection."""
+    img_path = drift_monitor.queue_dir / filename
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Sample image not found in active learning queue.")
+    return FileResponse(img_path)
+
+@app.post("/active-learning/review", tags=["MLOps"])
+async def review_active_learning_sample(req: ActiveLearningReviewRequest):
+    """Submits human verification action ('approve', 'relabel', 'discard') for continuous retraining."""
+    result = drift_monitor.review_sample(req.filename, req.action, req.verified_class)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return result
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])

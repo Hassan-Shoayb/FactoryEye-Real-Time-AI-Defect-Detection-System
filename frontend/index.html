@@ -360,6 +360,17 @@
                 </div>
             </div>
 
+            <!-- Active Learning Curation Queue Card -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="card-title">Active Learning Curation Queue (Human-in-the-Loop)</div>
+                    <span id="alQueueBadge" style="font-size: 12px; background: rgba(59, 130, 246, 0.2); color: var(--accent); padding: 3px 8px; border-radius: 9999px;">0 Ambiguous Samples</span>
+                </div>
+                <div id="alContainer" style="display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px;">
+                    <div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 12px; width: 100%;">No low-confidence defect samples waiting for review.</div>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -512,16 +523,18 @@
                 const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
                 const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
 
-                const [statsRes, logsRes, trendsRes, stationsRes] = await Promise.all([
+                const [statsRes, logsRes, trendsRes, stationsRes, alRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
                     fetch(defectsUrl),
                     fetch("/audit/stats/trends"),
-                    fetch("/audit/stations")
+                    fetch("/audit/stations"),
+                    fetch("/active-learning/queue")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
                 const trends = await trendsRes.json();
                 const stations = await stationsRes.json();
+                const alSamples = await alRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -563,6 +576,25 @@
                     paretoEl.innerHTML = `<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 12px;">No defect records logged yet to compute Pareto distribution.</div>`;
                 }
 
+                // Populate Active Learning Queue
+                const alContainer = document.getElementById('alContainer');
+                const alBadge = document.getElementById('alQueueBadge');
+                if (alBadge) alBadge.innerText = `${alSamples.length} Ambiguous Samples`;
+                if (alSamples && alSamples.length > 0) {
+                    alContainer.innerHTML = alSamples.map(s => `
+                        <div style="min-width: 170px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+                            <img src="/active-learning/sample/${s.filename}" style="width: 100%; height: 110px; object-fit: cover; border-radius: 4px;" />
+                            <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;">Conf: ${(s.confidence_estimate * 100).toFixed(0)}%</div>
+                            <div style="display: flex; gap: 6px;">
+                                <button onclick="reviewAL('${s.filename}', 'approve')" class="btn" style="padding: 3px 8px; font-size: 11px; flex: 1; justify-content: center; background: var(--success);">Keep</button>
+                                <button onclick="reviewAL('${s.filename}', 'discard')" class="btn btn-danger" style="padding: 3px 8px; font-size: 11px; flex: 1; justify-content: center;">Discard</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    alContainer.innerHTML = `<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 12px; width: 100%;">No low-confidence defect samples waiting for review.</div>`;
+                }
+
                 const tbody = document.getElementById('auditTableBody');
                 if (logs.records && logs.records.length > 0) {
                     tbody.innerHTML = logs.records.map(r => `
@@ -580,6 +612,24 @@
                 }
             } catch (err) {
                 console.error("Failed to load audit logs:", err);
+            }
+        }
+
+        async function reviewAL(filename, action) {
+            try {
+                const res = await fetch("/active-learning/review", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename, action, verified_class: "reviewed_defect" })
+                });
+                if (res.ok) {
+                    loadAuditLogs();
+                } else {
+                    const err = await res.json();
+                    alert("Active learning review error: " + (err.detail || "Failed"));
+                }
+            } catch (e) {
+                alert("Review request failed: " + e.message);
             }
         }
 

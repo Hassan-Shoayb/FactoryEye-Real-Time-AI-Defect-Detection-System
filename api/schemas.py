@@ -66,3 +66,15 @@ class DefectStatsSummary(BaseModel):
     quality_yield_percent: float
     mean_inference_ms: float
     defect_class_breakdown: List[Dict[str, Any]]
+
+class ActiveLearningSample(BaseModel):
+    filename: str
+    filepath: str
+    confidence_estimate: float
+    timestamp_utc: float
+
+class ActiveLearningReviewRequest(BaseModel):
+    filename: str
+    action: str = Field(..., description="'approve', 'relabel', or 'discard'")
+    verified_class: Optional[str] = Field(None, description="Human-verified defect class")
+

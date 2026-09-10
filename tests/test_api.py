@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from api.config import API_VERSION
 from api.database import audit_db
+from api.drift import drift_monitor
 
 client = TestClient(app)
 
@@ -154,6 +155,72 @@ def test_predict_rejects_empty_file():
     response = client.post("/predict", files=files)
     assert response.status_code == 400
 
+def test_active_learning_queue_endpoint():
+    """Verify /active-learning/queue lists ambiguous defect candidates."""
+    response = client.get("/active-learning/queue?limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    if len(data) > 0:
+        sample = data[0]
+        assert "filename" in sample
+        assert "confidence_estimate" in sample
+        assert "timestamp_utc" in sample
+
+def test_active_learning_review_endpoint():
+    """Verify /active-learning/review approves/promotes and discards samples."""
+    # 1. Create temporary sample in queue
+    dummy_name = "test_eval_conf_45.jpg"
+    dummy_path = drift_monitor.queue_dir / dummy_name
+    dummy_path.write_bytes(create_synthetic_image_bytes(100, 100))
+
+    # 2. Verify serving raw sample image
+    img_res = client.get(f"/active-learning/sample/{dummy_name}")
+    assert img_res.status_code == 200
+    assert len(img_res.content) > 0
+
+    # 3. Approve sample and assert dataset promotion
+    rev_res = client.post(
+        "/active-learning/review",
+        json={"filename": dummy_name, "action": "approve", "verified_class": "crazing"}
+    )
+    assert rev_res.status_code == 200
+    res_data = rev_res.json()
+    assert res_data["status"] == "success"
+    assert res_data["action"] == "approve"
+    assert res_data["verified_class"] == "crazing"
+
+    promoted_img = drift_monitor.queue_dir.parent / "curated_training_set" / "images" / dummy_name
+    promoted_lbl = drift_monitor.queue_dir.parent / "curated_training_set" / "labels" / "test_eval_conf_45.txt"
+    assert promoted_img.exists()
+    assert promoted_lbl.exists()
+
+    # Clean up promoted test files
+    if promoted_img.exists():
+        promoted_img.unlink()
+    if promoted_lbl.exists():
+        promoted_lbl.unlink()
+
+    # 4. Discard sample test
+    discard_name = "test_discard_conf_45.jpg"
+    discard_path = drift_monitor.queue_dir / discard_name
+    discard_path.write_bytes(create_synthetic_image_bytes(100, 100))
+    
+    disc_res = client.post(
+        "/active-learning/review",
+        json={"filename": discard_name, "action": "discard"}
+    )
+    assert disc_res.status_code == 200
+    assert disc_res.json()["status"] == "success"
+    assert not discard_path.exists()
+
+    # 5. Non-existent sample error handling
+    err_res = client.post(
+        "/active-learning/review",
+        json={"filename": "non_existent_defect_file.jpg", "action": "approve"}
+    )
+    assert err_res.status_code == 400
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -184,4 +251,8 @@ if __name__ == "__main__":
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL 14 API TESTS PASSED SUCCESSFULLY!")
+    test_active_learning_queue_endpoint()
+    print("  ✓ test_active_learning_queue_endpoint passed")
+    test_active_learning_review_endpoint()
+    print("  ✓ test_active_learning_review_endpoint passed")
+    print("\n🎉 ALL 16 API TESTS PASSED SUCCESSFULLY!")
