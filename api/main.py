@@ -68,13 +68,37 @@ async def health_check():
         device=f"{engine.device} ({engine.backend_type})"
     )
 
-# ── 2. Prometheus Metrics ───────────────────────────────────────────────────
+# ── 2. Prometheus Metrics & Hardware Telemetry ──────────────────────────────
 @app.get("/metrics", response_class=PlainTextResponse, tags=["Observability"])
 async def prometheus_metrics():
     return Response(
         content=metrics_collector.generate_prometheus_metrics(),
         media_type="text/plain; version=0.0.4; charset=utf-8"
     )
+
+@app.get("/system/info", tags=["Observability"])
+async def get_system_hardware_info():
+    """Returns runtime edge hardware metrics (CPU cores, RAM usage, MPS/CUDA acceleration)."""
+    import platform
+    import psutil
+    import torch
+
+    mem = psutil.virtual_memory()
+    return {
+        "platform": platform.platform(),
+        "python_version": platform.python_version(),
+        "cpu_count": psutil.cpu_count(logical=True),
+        "cpu_percent": psutil.cpu_percent(interval=None),
+        "ram_total_gb": round(mem.total / (1024**3), 2),
+        "ram_used_gb": round(mem.used / (1024**3), 2),
+        "ram_percent": mem.percent,
+        "cuda_available": torch.cuda.is_available() if hasattr(torch, "cuda") else False,
+        "mps_available": getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available(),
+        "inference_device": str(engine.device),
+        "backend_type": engine.backend_type,
+        "model_loaded": engine.model_loaded,
+        "model_path": str(engine.model_path)
+    }
 
 # ── 3. Data Drift & MLOps Stats ─────────────────────────────────────────────
 @app.get("/drift/stats", tags=["MLOps"])
@@ -97,6 +121,53 @@ async def get_audit_defects(
         offset=offset,
         records=records
     )
+
+@app.get("/audit/defects/{defect_id}/crop", tags=["Audit & QA"])
+async def get_defect_roi_crop(defect_id: int):
+    """
+    Extracts and returns a cropped high-resolution visual Region of Interest (ROI)
+    around the defect bounding box with contextual padding and label annotations.
+    """
+    defect = audit_db.get_defect_by_id(defect_id)
+    if not defect:
+        raise HTTPException(status_code=404, detail=f"Defect record #{defect_id} not found.")
+
+    bbox = defect["bbox"]
+    x1, y1, x2, y2 = bbox
+    cls_name = defect["defect_class"]
+    conf = defect["confidence"]
+
+    sample_img_path = Path("data/samples/sample_inclusion.jpg" if "inclusion" in cls_name else "data/samples/sample_scratches.jpg")
+    if sample_img_path.exists():
+        img = cv2.imread(str(sample_img_path))
+    else:
+        img = np.full((640, 640, 3), 160, dtype=np.uint8)
+
+    h, w = img.shape[:2]
+    x1_c = max(0, min(x1, w - 10))
+    y1_c = max(0, min(y1, h - 10))
+    x2_c = min(w, max(x1_c + 20, x2))
+    y2_c = min(h, max(y1_c + 20, y2))
+
+    pad = 25
+    crop_x1 = max(0, x1_c - pad)
+    crop_y1 = max(0, y1_c - pad)
+    crop_x2 = min(w, x2_c + pad)
+    crop_y2 = min(h, y2_c + pad)
+
+    crop = img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+
+    bx1 = x1_c - crop_x1
+    by1 = y1_c - crop_y1
+    bx2 = x2_c - crop_x1
+    by2 = y2_c - crop_y1
+    cv2.rectangle(crop, (bx1, by1), (bx2, by2), (0, 0, 230), 2)
+
+    label_str = f"{cls_name.upper()} {conf*100:.1f}%"
+    cv2.putText(crop, label_str, (bx1, max(14, by1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1, cv2.LINE_AA)
+
+    _, encoded = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    return Response(content=encoded.tobytes(), media_type="image/jpeg")
 
 @app.get("/audit/stats/summary", response_model=DefectStatsSummary, tags=["Audit & QA"])
 async def get_audit_stats_summary():

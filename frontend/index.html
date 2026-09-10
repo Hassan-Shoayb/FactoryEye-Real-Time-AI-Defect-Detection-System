@@ -384,10 +384,11 @@
                                 <th>Defect Class</th>
                                 <th>Confidence</th>
                                 <th>Bounding Box [x1, y1, x2, y2]</th>
+                                <th>Flaw ROI</th>
                             </tr>
                         </thead>
                         <tbody id="auditTableBody">
-                            <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Loading audit records...</td></tr>
+                            <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading audit records...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -571,10 +572,11 @@
                             <td><span class="defect-tag">${r.defect_class.toUpperCase()}</span></td>
                             <td style="font-family: monospace;">${(r.confidence * 100).toFixed(1)}%</td>
                             <td style="font-family: monospace; color: var(--text-muted);">[${r.bbox.join(', ')}]</td>
+                            <td><a href="/audit/defects/${r.id}/crop" target="_blank" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;">🔍 View ROI</a></td>
                         </tr>
                     `).join('');
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No defect records logged yet. Run image inspections to populate.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No defect records logged yet. Run image inspections to populate.</td></tr>`;
                 }
             } catch (err) {
                 console.error("Failed to load audit logs:", err);

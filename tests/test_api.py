@@ -82,6 +82,35 @@ def test_audit_stations_endpoint():
         assert "station_id" in data[0]
         assert "quality_yield_percent" in data[0]
 
+def test_system_hardware_info_endpoint():
+    """Verify /system/info returns runtime hardware and acceleration metrics."""
+    response = client.get("/system/info")
+    assert response.status_code == 200
+    data = response.json()
+    assert "cpu_count" in data
+    assert "ram_total_gb" in data
+    assert "inference_device" in data
+    assert "backend_type" in data
+
+def test_defect_roi_crop_endpoint():
+    """Verify /audit/defects/{id}/crop returns a cropped flaw thumbnail."""
+    # Ensure at least one defect record exists
+    insp_id = audit_db.log_inspection(
+        defect_count=1,
+        detections=[{"label": "scratches", "confidence": 0.88, "bbox": [40, 40, 180, 180]}],
+        inference_ms=12.5,
+        source="ROI Unit Test",
+        station_id="TEST_STATION"
+    )
+    records, total = audit_db.query_defects(limit=1, offset=0)
+    assert total > 0
+    defect_id = records[0]["id"]
+
+    response = client.get(f"/audit/defects/{defect_id}/crop")
+    assert response.status_code == 200
+    assert "image/jpeg" in response.headers.get("content-type", "")
+    assert len(response.content) > 100
+
 def test_quality_certificate_endpoint():
     """Verify /audit/certificate returns printable compliance sheet."""
     response = client.get("/audit/certificate?batch_id=TEST-BATCH-01")
@@ -141,6 +170,10 @@ if __name__ == "__main__":
     print("  ✓ test_audit_defect_trends_endpoint passed")
     test_audit_stations_endpoint()
     print("  ✓ test_audit_stations_endpoint passed")
+    test_system_hardware_info_endpoint()
+    print("  ✓ test_system_hardware_info_endpoint passed")
+    test_defect_roi_crop_endpoint()
+    print("  ✓ test_defect_roi_crop_endpoint passed")
     test_quality_certificate_endpoint()
     print("  ✓ test_quality_certificate_endpoint passed")
     test_explainability_heatmap_endpoint()
@@ -151,4 +184,4 @@ if __name__ == "__main__":
     print("  ✓ test_predict_rejects_non_image passed")
     test_predict_rejects_empty_file()
     print("  ✓ test_predict_rejects_empty_file passed")
-    print("\n🎉 ALL 12 API TESTS PASSED SUCCESSFULLY!")
+    print("\n🎉 ALL 14 API TESTS PASSED SUCCESSFULLY!")

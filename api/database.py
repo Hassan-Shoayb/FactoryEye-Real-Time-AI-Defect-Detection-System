@@ -150,6 +150,30 @@ class DefectAuditDatabase:
                 })
             return results, total
 
+    def get_defect_by_id(self, defect_id: int) -> Optional[Dict]:
+        """Fetches a specific defect record by its unique database ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, inspection_id, timestamp_utc, station_id, defect_class, confidence,
+                       bbox_x1, bbox_y1, bbox_x2, bbox_y2
+                FROM defect_records
+                WHERE id = ?
+            """, (defect_id,))
+            r = cursor.fetchone()
+            if not r:
+                return None
+            return {
+                "id": r["id"],
+                "inspection_id": r["inspection_id"],
+                "timestamp_utc": r["timestamp_utc"],
+                "datetime_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(r["timestamp_utc"])),
+                "station_id": r["station_id"],
+                "defect_class": r["defect_class"],
+                "confidence": round(r["confidence"], 4),
+                "bbox": [r["bbox_x1"], r["bbox_y1"], r["bbox_x2"], r["bbox_y2"]]
+            }
+
     def get_summary_stats(self) -> Dict:
         with self.get_connection() as conn:
             cursor = conn.cursor()
