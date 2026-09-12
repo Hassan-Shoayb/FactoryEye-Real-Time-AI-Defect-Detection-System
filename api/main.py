@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional, Dict
 
 import cv2
-from fastapi import FastAPI, File, UploadFile, Query, WebSocket, WebSocketDisconnect, HTTPException, Response
+from fastapi import FastAPI, File, UploadFile, Query, WebSocket, WebSocketDisconnect, HTTPException, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,9 +16,11 @@ from fastapi.staticfiles import StaticFiles
 from api.config import API_VERSION, CONFIDENCE_THRESHOLD, MODEL_PATH, DEVICE
 from api.schemas import (
     PredictResponse, VideoPredictResponse, VideoFrameResult, HealthResponse, Detection,
-    AuditQueryResponse, DefectStatsSummary, ActiveLearningSample, ActiveLearningReviewRequest
+    AuditQueryResponse, DefectStatsSummary, ActiveLearningSample, ActiveLearningReviewRequest,
+    CanaryConfig, CanaryConfigUpdate, CanaryMetricsResponse, CanaryActionResponse
 )
 from api.inference import engine
+from api.canary import canary_router
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -126,6 +128,50 @@ async def review_active_learning_sample(req: ActiveLearningReviewRequest):
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     return result
+
+# ── 3b. A/B Canary Model Governance & Traffic Splitting ──────────────────────
+@app.get("/canary/config", response_model=CanaryConfig, tags=["Canary & Governance"])
+async def get_canary_configuration():
+    """Returns current A/B canary routing state, model variants, and traffic split percentage."""
+    return canary_router.get_config()
+
+@app.post("/canary/config", response_model=CanaryConfig, tags=["Canary & Governance"])
+async def update_canary_configuration(update: CanaryConfigUpdate):
+    """Dynamically updates canary percentage, toggles canary routing, or loads a new candidate model."""
+    return canary_router.update_config(
+        enabled=update.enabled,
+        canary_percentage=update.canary_percentage,
+        canary_path=update.canary_path,
+        champion_name=update.champion_name,
+        canary_name=update.canary_name
+    )
+
+@app.get("/canary/metrics", response_model=CanaryMetricsResponse, tags=["Canary & Governance"])
+async def get_canary_comparative_metrics():
+    """Returns side-by-side comparative SLA analytics (latency, throughput, defect rate) between Champion and Canary."""
+    return canary_router.get_comparative_metrics()
+
+@app.post("/canary/promote", response_model=CanaryActionResponse, tags=["Canary & Governance"])
+async def promote_canary_challenger():
+    """Promotes the challenger model to primary Champion with zero downtime. Resets canary traffic to 0%."""
+    result = canary_router.promote_challenger()
+    if result["status"] == "error":
+        raise HTTPException(status_code=400, detail=result["message"])
+    return CanaryActionResponse(
+        status=result["status"],
+        message=result["message"],
+        config=result["config"]
+    )
+
+@app.post("/canary/rollback", response_model=CanaryActionResponse, tags=["Canary & Governance"])
+async def rollback_canary_traffic():
+    """Emergency kill-switch: Immediately redirects 100% of factory traffic to primary Champion."""
+    result = canary_router.rollback()
+    return CanaryActionResponse(
+        status=result["status"],
+        message=result["message"],
+        config=result["config"]
+    )
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])
@@ -260,7 +306,8 @@ async def predict_image(
     file: UploadFile = File(..., description="Steel surface image file (JPEG/PNG)"),
     conf: float = Query(CONFIDENCE_THRESHOLD, ge=0.05, le=1.0, description="Confidence threshold"),
     return_annotated: bool = Query(True, description="Include base64 annotated image"),
-    station_id: str = Query("STATION_01", description="Inspection station identifier")
+    station_id: str = Query("STATION_01", description="Inspection station identifier"),
+    x_factoryeye_model: Optional[str] = Header(None, alias="X-FactoryEye-Model", description="Force model variant: champion or canary")
 ):
     if file.content_type and not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a valid image (JPEG/PNG).")
@@ -273,16 +320,16 @@ async def predict_image(
     if frame is None:
         raise HTTPException(status_code=400, detail="Could not decode image. Corrupted file.")
 
-    annotated, detections, inference_ms = await asyncio.to_thread(
-        engine.run_inference, frame, conf, return_annotated
+    annotated, detections, inference_ms, model_variant, model_name = await asyncio.to_thread(
+        canary_router.route_inference, frame, conf, return_annotated, x_factoryeye_model
     )
 
     defect_count = len(detections)
     severity_info = severity_engine.evaluate_severity(frame.shape, detections)
 
-    metrics_collector.record_inference(inference_ms, detections)
+    metrics_collector.record_inference(inference_ms, detections, model_variant=model_variant)
     drift_monitor.analyze_predictions(frame, detections)
-    audit_db.log_inspection(defect_count, detections, inference_ms, source=f"Image: {file.filename}", station_id=station_id)
+    audit_db.log_inspection(defect_count, detections, inference_ms, source=f"Image: {file.filename}", station_id=station_id, model_variant=model_variant)
 
     if defect_count > 0:
         asyncio.create_task(alert_manager.send_defect_alert(
@@ -307,7 +354,9 @@ async def predict_image(
         defect_coverage_percent=severity_info["defect_coverage_percent"],
         action_recommendation=severity_info["action_recommendation"],
         inference_ms=inference_ms,
-        annotated_image=annotated_b64
+        annotated_image=annotated_b64,
+        model_variant=model_variant,
+        model_name=model_name
     )
 
 # ── 7. REST Video Clip Inspection ───────────────────────────────────────────
@@ -388,16 +437,16 @@ async def websocket_video_stream(websocket: WebSocket):
             if frame is None:
                 continue
 
-            annotated, detections, inf_ms = await asyncio.to_thread(
-                engine.run_inference, frame, CONFIDENCE_THRESHOLD, True
+            annotated, detections, inf_ms, model_variant, model_name = await asyncio.to_thread(
+                canary_router.route_inference, frame, CONFIDENCE_THRESHOLD, True
             )
 
             metrics_collector.record_frame_streamed()
-            metrics_collector.record_inference(inf_ms, detections)
+            metrics_collector.record_inference(inf_ms, detections, model_variant=model_variant)
             drift_monitor.analyze_predictions(frame, detections)
 
             if len(detections) > 0:
-                audit_db.log_inspection(len(detections), detections, inf_ms, source="Live Stream", station_id="CAMERA_01")
+                audit_db.log_inspection(len(detections), detections, inf_ms, source="Live Stream", station_id="CAMERA_01", model_variant=model_variant)
                 mqtt_publisher.publish_defect_event(
                     defect_count=len(detections),
                     detections=[d.model_dump() for d in detections],
@@ -409,7 +458,9 @@ async def websocket_video_stream(websocket: WebSocket):
                 "detections": [d.model_dump() for d in detections],
                 "defect_count": len(detections),
                 "defect_detected": len(detections) > 0,
-                "inference_ms": inf_ms
+                "inference_ms": inf_ms,
+                "model_variant": model_variant,
+                "model_name": model_name
             })
 
     except WebSocketDisconnect:

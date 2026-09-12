@@ -39,7 +39,8 @@ class DefectAuditDatabase:
                     source TEXT NOT NULL,
                     defect_count INTEGER NOT NULL,
                     defect_detected INTEGER NOT NULL,
-                    inference_ms REAL NOT NULL
+                    inference_ms REAL NOT NULL,
+                    model_variant TEXT DEFAULT 'champion'
                 )
             """)
             cursor.execute("""
@@ -54,12 +55,31 @@ class DefectAuditDatabase:
                     bbox_y1 INTEGER,
                     bbox_x2 INTEGER,
                     bbox_y2 INTEGER,
+                    model_variant TEXT DEFAULT 'champion',
                     FOREIGN KEY (inspection_id) REFERENCES inspection_events(id)
                 )
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_defect_class ON defect_records(defect_class)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_defect_timestamp ON defect_records(timestamp_utc)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_inspection_timestamp ON inspection_events(timestamp_utc)")
+
+            # Dynamic column migration safety check
+            cursor.execute("PRAGMA table_info(inspection_events)")
+            insp_cols = [row["name"] for row in cursor.fetchall()]
+            if "model_variant" not in insp_cols:
+                try:
+                    cursor.execute("ALTER TABLE inspection_events ADD COLUMN model_variant TEXT DEFAULT 'champion'")
+                except Exception:
+                    pass
+
+            cursor.execute("PRAGMA table_info(defect_records)")
+            rec_cols = [row["name"] for row in cursor.fetchall()]
+            if "model_variant" not in rec_cols:
+                try:
+                    cursor.execute("ALTER TABLE defect_records ADD COLUMN model_variant TEXT DEFAULT 'champion'")
+                except Exception:
+                    pass
+
             conn.commit()
             logger.info(f"✓ Defect audit database initialized at {self.db_path}")
 
@@ -69,7 +89,8 @@ class DefectAuditDatabase:
         detections: List[Dict],
         inference_ms: float,
         source: str = "REST API",
-        station_id: str = "STATION_01"
+        station_id: str = "STATION_01",
+        model_variant: str = "champion"
     ) -> int:
         now = time.time()
         datetime_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
@@ -78,9 +99,9 @@ class DefectAuditDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO inspection_events 
-                (timestamp_utc, datetime_iso, station_id, source, defect_count, defect_detected, inference_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (now, datetime_iso, station_id, source, defect_count, 1 if defect_count > 0 else 0, inference_ms))
+                (timestamp_utc, datetime_iso, station_id, source, defect_count, defect_detected, inference_ms, model_variant)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (now, datetime_iso, station_id, source, defect_count, 1 if defect_count > 0 else 0, inference_ms, model_variant))
             inspection_id = cursor.lastrowid
 
             for d in detections:
@@ -91,9 +112,9 @@ class DefectAuditDatabase:
 
                 cursor.execute("""
                     INSERT INTO defect_records
-                    (inspection_id, timestamp_utc, station_id, defect_class, confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (inspection_id, now, station_id, label, conf, x1, y1, x2, y2))
+                    (inspection_id, timestamp_utc, station_id, defect_class, confidence, bbox_x1, bbox_y1, bbox_x2, bbox_y2, model_variant)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (inspection_id, now, station_id, label, conf, x1, y1, x2, y2, model_variant))
             
             conn.commit()
             return inspection_id
@@ -126,7 +147,7 @@ class DefectAuditDatabase:
 
             query = f"""
                 SELECT id, inspection_id, timestamp_utc, station_id, defect_class, confidence,
-                       bbox_x1, bbox_y1, bbox_x2, bbox_y2
+                       bbox_x1, bbox_y1, bbox_x2, bbox_y2, model_variant
                 FROM defect_records
                 WHERE {where_clause}
                 ORDER BY timestamp_utc DESC
@@ -146,7 +167,8 @@ class DefectAuditDatabase:
                     "station_id": r["station_id"],
                     "defect_class": r["defect_class"],
                     "confidence": round(r["confidence"], 4),
-                    "bbox": [r["bbox_x1"], r["bbox_y1"], r["bbox_x2"], r["bbox_y2"]]
+                    "bbox": [r["bbox_x1"], r["bbox_y1"], r["bbox_x2"], r["bbox_y2"]],
+                    "model_variant": r["model_variant"] if "model_variant" in r.keys() and r["model_variant"] else "champion"
                 })
             return results, total
 
@@ -301,13 +323,14 @@ class DefectAuditDatabase:
         records, _ = self.query_defects(limit=10000, offset=0)
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["ID", "Inspection_ID", "Datetime_UTC", "Station_ID", "Defect_Class", "Confidence", "BBox_X1", "BBox_Y1", "BBox_X2", "BBox_Y2"])
+        writer.writerow(["ID", "Inspection_ID", "Datetime_UTC", "Station_ID", "Defect_Class", "Confidence", "BBox_X1", "BBox_Y1", "BBox_X2", "BBox_Y2", "Model_Variant"])
 
         for r in records:
             writer.writerow([
                 r["id"], r["inspection_id"], r["datetime_iso"], r["station_id"],
                 r["defect_class"], r["confidence"],
-                r["bbox"][0], r["bbox"][1], r["bbox"][2], r["bbox"][3]
+                r["bbox"][0], r["bbox"][1], r["bbox"][2], r["bbox"][3],
+                r.get("model_variant", "champion")
             ])
         return output.getvalue()
 

@@ -18,10 +18,12 @@ class MetricsCollector:
         self.latency_counts = defaultdict(int)
         self.latency_sum_ms = 0.0
         self.latency_count = 0
+        self.canary_inferences_total = defaultdict(int)
 
-    def record_inference(self, latency_ms: float, detections: List[Dict]):
+    def record_inference(self, latency_ms: float, detections: List[Dict], model_variant: str = "champion"):
         with self._lock:
             self.images_processed_total += 1
+            self.canary_inferences_total[model_variant] += 1
             self.latency_count += 1
             self.latency_sum_ms += latency_ms
             for bucket in self.latency_buckets:
@@ -74,6 +76,14 @@ class MetricsCollector:
         lines.append(f'factoryeye_inference_latency_ms_bucket{{le="+Inf"}} {self.latency_count}')
         lines.append(f"factoryeye_inference_latency_ms_sum {self.latency_sum_ms:.2f}")
         lines.append(f"factoryeye_inference_latency_ms_count {self.latency_count}")
+
+        lines.extend([
+            "",
+            "# HELP factoryeye_canary_inferences_total Inferences processed segmented by model variant (champion vs canary)",
+            "# TYPE factoryeye_canary_inferences_total counter",
+            f'factoryeye_canary_inferences_total{{model_variant="champion"}} {self.canary_inferences_total["champion"]}',
+            f'factoryeye_canary_inferences_total{{model_variant="canary"}} {self.canary_inferences_total["canary"]}'
+        ])
 
         return "\n".join(lines) + "\n"
 

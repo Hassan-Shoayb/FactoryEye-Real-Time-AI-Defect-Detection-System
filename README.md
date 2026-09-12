@@ -118,6 +118,7 @@ defect-detection/
 │   ├── explainability.py       # Saliency attention heatmaps & jet colormap overlays (/explain)
 │   ├── severity.py             # Defect severity grading & QA action recommendation engine
 │   ├── certificate.py          # ISO Metallurgical quality inspection certificate generator (/audit/certificate)
+│   ├── canary.py               # Production A/B Canary traffic router, live SLA comparative telemetry & promotion engine
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -481,6 +482,39 @@ curl -X POST http://localhost:8000/active-learning/review \
 
 ---
 
+### `GET /canary/config` & `POST /canary/config`
+
+Inspects or dynamically updates live A/B canary routing percentages and candidate challenger models without container restart:
+
+```bash
+# View active canary status
+curl http://localhost:8000/canary/config
+
+# Update split: route 25% traffic to candidate weights
+curl -X POST http://localhost:8000/canary/config \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "canary_percentage": 25.0, "canary_path": "training/runs/train/weights/best.pt"}'
+```
+
+---
+
+### `GET /canary/metrics`
+
+Returns live side-by-side SLA comparative performance analytics between Champion and Canary models (request throughput, mean/P95 latency, defect discovery rate):
+
+```bash
+curl http://localhost:8000/canary/metrics
+```
+
+---
+
+### `POST /canary/rollback` & `POST /canary/promote`
+
+- **`POST /canary/rollback`**: Emergency kill-switch. Instantly redirects 100% of factory traffic to primary Champion.
+- **`POST /canary/promote`**: Zero-downtime model promotion. Sets candidate model as the new primary Champion and resets canary traffic to 0%.
+
+---
+
 ## MLflow Experiment Tracking
 
 Every training run is automatically logged. To compare runs:
@@ -536,7 +570,7 @@ docker compose up --build --force-recreate
 
 ## Running Tests
 
-FactoryEye includes an end-to-end integration and API verification suite testing all 16 endpoints and subsystems:
+FactoryEye includes an end-to-end integration and API verification suite testing all 19 endpoints and subsystems:
 
 ```bash
 make test
@@ -563,8 +597,11 @@ Running FactoryEye API Tests...
   ✓ test_predict_rejects_empty_file passed
   ✓ test_active_learning_queue_endpoint passed
   ✓ test_active_learning_review_endpoint passed
+  ✓ test_canary_config_endpoints passed
+  ✓ test_canary_routing_and_metrics passed
+  ✓ test_canary_rollback_and_promote passed
 
-🎉 ALL 16 API TESTS PASSED SUCCESSFULLY!
+🎉 ALL 19 API TESTS PASSED SUCCESSFULLY!
 ```
 
 Tests use FastAPI's `TestClient` — no server needs to be running.
@@ -605,8 +642,8 @@ docker run -p 8000:8000 --env-file .env yourdockerhubname/factoryeye:latest
 - [x] ISO Metallurgical Quality Compliance Certificate generator (`/audit/certificate`)
 - [x] Champion vs Challenger SLA model regression gating (`scripts/model_gate.py`)
 - [x] Support for RTSP camera streams (`api/rtsp_stream.py`)
+- [x] A/B canary testing between model versions in production traffic (`api/canary.py`)
 - [ ] S3 artifact backend for MLflow (replacing local filesystem)
-- [ ] A/B canary testing between model versions in production traffic
 
 ---
 

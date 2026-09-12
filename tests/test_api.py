@@ -12,6 +12,7 @@ from api.main import app
 from api.config import API_VERSION
 from api.database import audit_db
 from api.drift import drift_monitor
+from api.canary import canary_router
 
 client = TestClient(app)
 
@@ -221,6 +222,92 @@ def test_active_learning_review_endpoint():
     )
     assert err_res.status_code == 400
 
+def test_canary_config_endpoints():
+    """Verify /canary/config GET and POST update behaviors."""
+    # 1. GET initial config
+    res = client.get("/canary/config")
+    assert res.status_code == 200
+    cfg = res.json()
+    assert "enabled" in cfg
+    assert "canary_percentage" in cfg
+    assert "champion_name" in cfg
+    assert "routing_strategy" in cfg
+
+    # 2. Update config dynamically
+    update_payload = {
+        "enabled": True,
+        "canary_percentage": 30.0,
+        "champion_name": "Champion-Primary-v1",
+        "canary_name": "Canary-Candidate-v2"
+    }
+    post_res = client.post("/canary/config", json=update_payload)
+    assert post_res.status_code == 200
+    new_cfg = post_res.json()
+    assert new_cfg["enabled"] is True
+    assert new_cfg["canary_percentage"] == 30.0
+    assert new_cfg["champion_name"] == "Champion-Primary-v1"
+    assert new_cfg["canary_name"] == "Canary-Candidate-v2"
+
+    # Reset back to default
+    client.post("/canary/config", json={"enabled": False, "canary_percentage": 20.0})
+
+def test_canary_routing_and_metrics():
+    """Verify inference routing tagged with model_variant and /canary/metrics telemetry."""
+    img_bytes = create_synthetic_image_bytes()
+    files = {"file": ("test_canary.jpg", img_bytes, "image/jpeg")}
+
+    # 1. Test deterministic routing using X-FactoryEye-Model header
+    headers = {"X-FactoryEye-Model": "champion"}
+    res = client.post("/predict?conf=0.20", files=files, headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["model_variant"] == "champion"
+    assert "model_name" in data
+
+    # 2. Check /canary/metrics
+    met_res = client.get("/canary/metrics")
+    assert met_res.status_code == 200
+    met = met_res.json()
+    assert "champion" in met
+    assert "canary" in met
+    assert met["champion"]["inferences_count"] > 0
+    assert "mean_latency_ms" in met["champion"]
+
+    # 3. Verify Prometheus metric exposition
+    prom_res = client.get("/metrics")
+    assert prom_res.status_code == 200
+    assert 'factoryeye_canary_inferences_total{model_variant="champion"}' in prom_res.text
+
+def test_canary_rollback_and_promote():
+    """Verify emergency rollback kill-switch and candidate promotion."""
+    # 1. Configure and enable canary
+    client.post("/canary/config", json={"enabled": True, "canary_percentage": 50.0})
+
+    # 2. Emergency rollback kill-switch
+    roll_res = client.post("/canary/rollback")
+    assert roll_res.status_code == 200
+    roll_data = roll_res.json()
+    assert roll_data["status"] == "success"
+    assert roll_data["config"]["enabled"] is False
+    assert roll_data["config"]["canary_percentage"] == 0.0
+
+    # 3. Promotion without candidate returns 400
+    canary_router.canary_engine = None
+    prom_fail = client.post("/canary/promote")
+    assert prom_fail.status_code == 400
+
+    # 4. Attach valid candidate engine and test successful promotion
+    canary_router.canary_engine = canary_router.champion_engine
+    canary_router.canary_name = "NextGen-Model"
+    canary_router.canary_path = "training/runs/train/weights/best.pt"
+    
+    prom_res = client.post("/canary/promote")
+    assert prom_res.status_code == 200
+    assert prom_res.json()["status"] == "success"
+    current_cfg = client.get("/canary/config").json()
+    assert "NextGen-Model" in current_cfg["champion_name"]
+    assert current_cfg["enabled"] is False
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -255,4 +342,10 @@ if __name__ == "__main__":
     print("  ✓ test_active_learning_queue_endpoint passed")
     test_active_learning_review_endpoint()
     print("  ✓ test_active_learning_review_endpoint passed")
-    print("\n🎉 ALL 16 API TESTS PASSED SUCCESSFULLY!")
+    test_canary_config_endpoints()
+    print("  ✓ test_canary_config_endpoints passed")
+    test_canary_routing_and_metrics()
+    print("  ✓ test_canary_routing_and_metrics passed")
+    test_canary_rollback_and_promote()
+    print("  ✓ test_canary_rollback_and_promote passed")
+    print("\n🎉 ALL 19 API TESTS PASSED SUCCESSFULLY!")

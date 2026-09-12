@@ -16,6 +16,8 @@ class PredictResponse(BaseModel):
     action_recommendation: str = Field(default="PASS", description="Recommended shop-floor QA action (PASS, REWORK, SCRAP)")
     inference_ms: float = Field(..., ge=0.0, description="Inference latency in milliseconds")
     annotated_image: Optional[str] = Field(None, description="Base64 data URL of the annotated image with bounding boxes")
+    model_variant: str = Field(default="champion", description="Variant that performed inference: champion or canary")
+    model_name: Optional[str] = Field(default=None, description="Descriptive identifier of the model instance")
 
 class VideoFrameResult(BaseModel):
     frame: int = Field(..., ge=0, description="Frame index processed")
@@ -46,6 +48,7 @@ class AuditDefectItem(BaseModel):
     defect_class: str
     confidence: float
     bbox: List[int]
+    model_variant: Optional[str] = Field(default="champion", description="Model variant: champion or canary")
 
 class AuditQueryResponse(BaseModel):
     total: int
@@ -77,4 +80,47 @@ class ActiveLearningReviewRequest(BaseModel):
     filename: str
     action: str = Field(..., description="'approve', 'relabel', or 'discard'")
     verified_class: Optional[str] = Field(None, description="Human-verified defect class")
+
+class CanaryConfig(BaseModel):
+    enabled: bool = Field(..., description="Whether canary traffic splitting is active")
+    canary_percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of traffic routed to candidate model (0-100)")
+    champion_name: str = Field(..., description="Name / tag of the champion production model")
+    champion_path: str = Field(..., description="Filesystem path of the champion weights")
+    canary_name: str = Field(..., description="Name / tag of the challenger candidate model")
+    canary_path: Optional[str] = Field(None, description="Filesystem path of the canary weights")
+    canary_loaded: bool = Field(..., description="Whether the canary candidate model is currently loaded in memory")
+    routing_strategy: str = Field(default="weighted_random", description="Routing mode: weighted_random or header_override")
+
+class CanaryConfigUpdate(BaseModel):
+    enabled: Optional[bool] = Field(None, description="Enable or disable canary routing")
+    canary_percentage: Optional[float] = Field(None, ge=0.0, le=100.0, description="Target canary traffic percentage")
+    canary_path: Optional[str] = Field(None, description="File path to candidate weights to load")
+    champion_name: Optional[str] = Field(None, description="Updated name for champion")
+    canary_name: Optional[str] = Field(None, description="Updated name for canary")
+
+class CanaryModelTelemetry(BaseModel):
+    model_name: str
+    model_path: str
+    model_variant: str
+    inferences_count: int
+    mean_latency_ms: float
+    min_latency_ms: float
+    max_latency_ms: float
+    p95_latency_ms: float
+    defective_inferences: int
+    defect_detection_rate_percent: float
+    total_defects_found: int
+
+class CanaryMetricsResponse(BaseModel):
+    canary_enabled: bool
+    canary_percentage: float
+    routing_strategy: str
+    total_inferences: int
+    champion: CanaryModelTelemetry
+    canary: CanaryModelTelemetry
+
+class CanaryActionResponse(BaseModel):
+    status: str
+    message: str
+    config: CanaryConfig
 
