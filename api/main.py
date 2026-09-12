@@ -17,10 +17,12 @@ from api.config import API_VERSION, CONFIDENCE_THRESHOLD, MODEL_PATH, DEVICE
 from api.schemas import (
     PredictResponse, VideoPredictResponse, VideoFrameResult, HealthResponse, Detection,
     AuditQueryResponse, DefectStatsSummary, ActiveLearningSample, ActiveLearningReviewRequest,
-    CanaryConfig, CanaryConfigUpdate, CanaryMetricsResponse, CanaryActionResponse
+    CanaryConfig, CanaryConfigUpdate, CanaryMetricsResponse, CanaryActionResponse,
+    CuratedDatasetSummary, RetrainTriggerRequest, RetrainJobStatus, RetrainJobListResponse
 )
 from api.inference import engine
 from api.canary import canary_router
+from api.retrain import retraining_orchestrator
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -172,6 +174,41 @@ async def rollback_canary_traffic():
         message=result["message"],
         config=result["config"]
     )
+
+# ── 3c. Continuous Retraining & Lifecycle Pipeline ──────────────────────────
+@app.get("/retrain/curated-summary", response_model=CuratedDatasetSummary, tags=["Continuous Retraining"])
+async def get_curated_dataset_summary():
+    """Returns summary and class breakdown of verified active learning defect samples ready for retraining."""
+    return retraining_orchestrator.get_curated_summary()
+
+@app.post("/retrain/trigger", response_model=RetrainJobStatus, tags=["Continuous Retraining"])
+async def trigger_retraining(req: RetrainTriggerRequest):
+    """Triggers an asynchronous background fine-tuning pipeline on the augmented curated dataset."""
+    job_id = retraining_orchestrator.trigger_retraining_job(
+        epochs=req.epochs,
+        batch_size=req.batch_size,
+        base_model=req.base_model,
+        auto_mount_canary=req.auto_mount_canary,
+        canary_split_percent=req.canary_split_percent,
+        sla_max_latency_ms=req.sla_max_latency_ms,
+        dry_run=req.dry_run
+    )
+    status = retraining_orchestrator.get_job_status(job_id)
+    return status
+
+@app.get("/retrain/status/{job_id}", response_model=RetrainJobStatus, tags=["Continuous Retraining"])
+async def get_retraining_job_status(job_id: str):
+    """Polls real-time progress, logs, metrics, and canary deployment status of a retraining job."""
+    status = retraining_orchestrator.get_job_status(job_id)
+    if not status:
+        raise HTTPException(status_code=404, detail=f"Retraining job {job_id} not found.")
+    return status
+
+@app.get("/retrain/jobs", response_model=RetrainJobListResponse, tags=["Continuous Retraining"])
+async def list_retraining_jobs():
+    """Lists history of all background model fine-tuning runs and their SLA gate outcomes."""
+    jobs = retraining_orchestrator.list_jobs()
+    return RetrainJobListResponse(total_jobs=len(jobs), jobs=jobs)
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])

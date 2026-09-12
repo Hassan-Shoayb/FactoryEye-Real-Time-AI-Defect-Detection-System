@@ -451,6 +451,121 @@
                 </div>
             </div>
 
+            <!-- Continuous Model Retraining & Lifecycle Pipeline Card -->
+            <div class="card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(6, 78, 59, 0.15);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">🔄</span>
+                        <div class="card-title" style="margin-bottom: 0;">Automated Continuous Retraining & Model Lifecycle</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="retrainStatusBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600;">IDLE (READY)</span>
+                        <button id="triggerRetrainBtn" onclick="triggerRetrainJob()" class="btn" style="padding: 6px 14px; font-size: 12px; background: #059669;">🚀 Trigger Retraining</button>
+                    </div>
+                </div>
+
+                <!-- Curation Pool Summary & Pipeline Configuration -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; background: rgba(15, 23, 42, 0.6); padding: 14px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Human-Curated Training Pool</div>
+                        <div style="display: flex; align-items: baseline; gap: 8px;">
+                            <span id="retrainCuratedCount" style="font-size: 20px; font-weight: 700; color: #34d399;">0</span>
+                            <span style="font-size: 12px; color: var(--text-muted);">verified samples</span>
+                        </div>
+                        <div id="retrainClassBreakdown" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; font-size: 11px;">
+                            <span style="color: var(--text-muted);">No verified defect samples in pool</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Training Hyperparameters</div>
+                        <div style="display: flex; gap: 8px;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: var(--text-muted);">Epochs</label>
+                                <input type="number" id="retrainEpochs" min="1" max="200" value="10" style="width: 100%; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: var(--text-muted);">Batch</label>
+                                <input type="number" id="retrainBatch" min="1" max="128" value="16" style="width: 100%; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">SLA Verification & Rollout</div>
+                        <div style="display: flex; gap: 8px;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: var(--text-muted);">Max Latency SLA (ms)</label>
+                                <input type="number" id="retrainSlaLat" min="5" max="200" value="30.0" step="0.5" style="width: 100%; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: var(--text-muted);">Canary Split %</label>
+                                <input type="number" id="retrainCanarySplit" min="0" max="100" value="20" style="width: 100%; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; justify-content: center; gap: 6px;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" id="retrainAutoCanary" checked style="cursor: pointer;">
+                            <span>Auto-mount Canary on SLA Pass</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; color: var(--text-muted);">
+                            <input type="checkbox" id="retrainDryRun" checked style="cursor: pointer;">
+                            <span>Fast dry-run simulation (instant CI/demo)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Active Pipeline Progress Bar & Telemetry -->
+                <div id="retrainProgressContainer" style="display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+                        <div>
+                            <span id="retrainPhaseLabel" style="font-weight: 700; color: #34d399;">NO ACTIVE JOB</span>
+                            <span id="retrainJobIdLabel" style="margin-left: 8px; font-family: monospace; color: var(--text-muted); font-size: 11px;"></span>
+                        </div>
+                        <span id="retrainProgressPct" style="font-family: monospace; font-weight: 700;">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: rgba(15, 23, 42, 0.8); border-radius: 4px; overflow: hidden;">
+                        <div id="retrainProgressBar" style="width: 0%; height: 100%; background: #10b981; transition: width 0.3s ease; border-radius: 4px;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span id="retrainStatusMsg">Pipeline ready for trigger.</span>
+                        <span id="retrainMetricsLabel" style="font-family: monospace; color: #a78bfa;"></span>
+                    </div>
+                </div>
+
+                <!-- Retraining Console Logs -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">EXECUTION LOGS</span>
+                        <button onclick="clearRetrainLogs()" style="background: none; border: none; color: var(--text-muted); font-size: 10px; cursor: pointer;">Clear Logs</button>
+                    </div>
+                    <pre id="retrainConsoleLogs" style="background: #020617; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94a3b8; height: 110px; overflow-y: auto; white-space: pre-wrap; line-height: 1.4;">[00:00:00] Pipeline idle. Trigger retraining to start the automated MLOps fine-tuning lifecycle.</pre>
+                </div>
+
+                <!-- Retraining History Table -->
+                <div style="overflow-x: auto; margin-top: 4px;">
+                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-main);">Recent Retraining Runs</div>
+                    <table style="font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Status</th>
+                                <th>Samples</th>
+                                <th>mAP@50</th>
+                                <th>SLA Gate</th>
+                                <th>Canary</th>
+                                <th>Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="retrainHistoryBody">
+                            <tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No retraining jobs recorded yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -616,14 +731,16 @@
                 const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
                 const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
 
-                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes] = await Promise.all([
+                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
                     fetch(defectsUrl),
                     fetch("/audit/stats/trends"),
                     fetch("/audit/stations"),
                     fetch("/active-learning/queue"),
                     fetch("/canary/config"),
-                    fetch("/canary/metrics")
+                    fetch("/canary/metrics"),
+                    fetch("/retrain/curated-summary"),
+                    fetch("/retrain/jobs")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
@@ -632,6 +749,8 @@
                 const alSamples = await alRes.json();
                 const canaryCfg = await canaryCfgRes.json();
                 const canaryMet = await canaryMetRes.json();
+                const retrainSum = await retrainSumRes.json();
+                const retrainJobs = await retrainJobsRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -750,6 +869,53 @@
                 } else {
                     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No defect records logged yet. Run image inspections to populate.</td></tr>`;
                 }
+
+                // Populate Continuous Retraining Pool Summary
+                const retrainCountEl = document.getElementById('retrainCuratedCount');
+                if (retrainCountEl) retrainCountEl.innerText = retrainSum.total_curated_images || 0;
+
+                const retrainClassEl = document.getElementById('retrainClassBreakdown');
+                if (retrainClassEl) {
+                    const dist = retrainSum.class_distribution || {};
+                    const keys = Object.keys(dist);
+                    if (keys.length > 0) {
+                        retrainClassEl.innerHTML = keys.map(k => `
+                            <span style="background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                ${k}: <b>${dist[k]}</b>
+                            </span>
+                        `).join('');
+                    } else {
+                        retrainClassEl.innerHTML = `<span style="color: var(--text-muted);">No verified defect samples in pool</span>`;
+                    }
+                }
+
+                // Populate Retraining History Table
+                const histTbody = document.getElementById('retrainHistoryBody');
+                if (histTbody && retrainJobs.jobs) {
+                    if (retrainJobs.jobs.length > 0) {
+                        histTbody.innerHTML = retrainJobs.jobs.slice().reverse().map(j => `
+                            <tr>
+                                <td style="font-family: monospace; font-size: 11px;">${j.job_id}</td>
+                                <td>
+                                    <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: ${j.status === 'COMPLETED' ? 'rgba(16, 185, 129, 0.2)' : (j.status === 'FAILED' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(139, 92, 246, 0.2)')}; color: ${j.status === 'COMPLETED' ? '#34d399' : (j.status === 'FAILED' ? 'var(--danger)' : '#a78bfa')};">
+                                        ${j.status}
+                                    </span>
+                                </td>
+                                <td style="font-family: monospace;">${j.curated_samples_used}</td>
+                                <td style="font-family: monospace;">${j.map50 !== null && j.map50 !== undefined ? (j.map50 * 100).toFixed(1) + '%' : '-'}</td>
+                                <td>
+                                    ${j.gate_passed === true ? '<span style="color: var(--success); font-weight: 600;">PASS ✓</span>' : (j.gate_passed === false ? '<span style="color: var(--danger); font-weight: 600;">FAIL ✗</span>' : '-')}
+                                </td>
+                                <td>
+                                    ${j.canary_mounted ? '<span style="color: #a78bfa; font-weight: 600;">MOUNTED</span>' : '<span style="color: var(--text-muted);">-</span>'}
+                                </td>
+                                <td style="font-family: monospace; color: var(--text-muted);">${j.duration_sec ? j.duration_sec + 's' : '-'}</td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        histTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No retraining jobs recorded yet.</td></tr>`;
+                    }
+                }
             } catch (err) {
                 console.error("Failed to load audit logs:", err);
             }
@@ -825,6 +991,138 @@
             } catch (e) {
                 alert("Review request failed: " + e.message);
             }
+        }
+
+        // Continuous Retraining & Model Lifecycle Pipeline Functions
+        let activeRetrainPollInterval = null;
+
+        async function triggerRetrainJob() {
+            const epochs = parseInt(document.getElementById('retrainEpochs').value) || 10;
+            const batch_size = parseInt(document.getElementById('retrainBatch').value) || 16;
+            const sla_max_latency_ms = parseFloat(document.getElementById('retrainSlaLat').value) || 30.0;
+            const canary_split_percent = parseFloat(document.getElementById('retrainCanarySplit').value) || 20.0;
+            const auto_mount_canary = document.getElementById('retrainAutoCanary').checked;
+            const dry_run = document.getElementById('retrainDryRun').checked;
+
+            const btn = document.getElementById('triggerRetrainBtn');
+            btn.disabled = true;
+            btn.innerText = "⏳ Initializing...";
+
+            try {
+                const res = await fetch("/retrain/trigger", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        epochs,
+                        batch_size,
+                        sla_max_latency_ms,
+                        canary_split_percent,
+                        auto_mount_canary,
+                        dry_run
+                    })
+                });
+
+                if (res.ok) {
+                    const job = await res.json();
+                    updateRetrainProgressUI(job);
+                    startRetrainPolling(job.job_id);
+                } else {
+                    const err = await res.json();
+                    alert("Retraining trigger failed: " + (err.detail || "Server error"));
+                    btn.disabled = false;
+                    btn.innerText = "🚀 Trigger Retraining";
+                }
+            } catch (e) {
+                alert("Failed to connect to retraining service: " + e.message);
+                btn.disabled = false;
+                btn.innerText = "🚀 Trigger Retraining";
+            }
+        }
+
+        function startRetrainPolling(jobId) {
+            if (activeRetrainPollInterval) {
+                clearInterval(activeRetrainPollInterval);
+            }
+            const btn = document.getElementById('triggerRetrainBtn');
+            btn.disabled = true;
+            btn.innerText = "⏳ Retraining Active...";
+
+            activeRetrainPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/retrain/status/${jobId}`);
+                    if (res.ok) {
+                        const job = await res.json();
+                        updateRetrainProgressUI(job);
+
+                        if (job.status === "COMPLETED" || job.status === "FAILED") {
+                            clearInterval(activeRetrainPollInterval);
+                            activeRetrainPollInterval = null;
+                            btn.disabled = false;
+                            btn.innerText = "🚀 Trigger Retraining";
+                            loadAuditLogs(); // Refresh all telemetry, canary metrics, and retrain history
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error polling retrain job:", err);
+                }
+            }, 600);
+        }
+
+        function updateRetrainProgressUI(job) {
+            const badge = document.getElementById('retrainStatusBadge');
+            const phaseLabel = document.getElementById('retrainPhaseLabel');
+            const idLabel = document.getElementById('retrainJobIdLabel');
+            const pctLabel = document.getElementById('retrainProgressPct');
+            const bar = document.getElementById('retrainProgressBar');
+            const msgLabel = document.getElementById('retrainStatusMsg');
+            const metLabel = document.getElementById('retrainMetricsLabel');
+            const logsPre = document.getElementById('retrainConsoleLogs');
+
+            if (idLabel) idLabel.innerText = `[${job.job_id}]`;
+            if (pctLabel) pctLabel.innerText = `${Math.round(job.progress_percent)}%`;
+            if (bar) bar.style.width = `${job.progress_percent}%`;
+            if (msgLabel) msgLabel.innerText = job.message || "";
+
+            if (phaseLabel) {
+                phaseLabel.innerText = job.status;
+                if (job.status === "COMPLETED") {
+                    phaseLabel.style.color = "#34d399";
+                } else if (job.status === "FAILED") {
+                    phaseLabel.style.color = "var(--danger)";
+                } else {
+                    phaseLabel.style.color = "#a78bfa";
+                }
+            }
+
+            if (badge) {
+                if (job.status === "COMPLETED") {
+                    badge.innerText = "COMPLETE (SLA VERIFIED)";
+                    badge.style.background = "rgba(16, 185, 129, 0.25)";
+                    badge.style.color = "#34d399";
+                } else if (job.status === "FAILED") {
+                    badge.innerText = "FAILED (GATE REJECTED)";
+                    badge.style.background = "rgba(239, 68, 68, 0.25)";
+                    badge.style.color = "var(--danger)";
+                } else {
+                    badge.innerText = `RUNNING (${job.status})`;
+                    badge.style.background = "rgba(139, 92, 246, 0.25)";
+                    badge.style.color = "#c4b5fd";
+                }
+            }
+
+            if (metLabel && job.map50 !== null && job.map50 !== undefined) {
+                metLabel.innerText = `mAP@50: ${(job.map50 * 100).toFixed(1)}% | Gate: ${job.gate_passed ? "PASS ✓" : "FAIL ✗"} | Canary: ${job.canary_mounted ? "MOUNTED 🐥" : "OFF"}`;
+            }
+
+            if (logsPre && job.logs && job.logs.length > 0) {
+                logsPre.innerText = job.logs.join("\n");
+                logsPre.scrollTop = logsPre.scrollHeight;
+            }
+        }
+
+        function clearRetrainLogs() {
+            const logsPre = document.getElementById('retrainConsoleLogs');
+            if (logsPre) logsPre.innerText = "[CLEARED] Awaiting next pipeline trigger.";
         }
 
         // Live WebSocket Streaming

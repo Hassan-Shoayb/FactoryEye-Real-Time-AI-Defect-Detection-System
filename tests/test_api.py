@@ -1,5 +1,6 @@
 import io
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -308,6 +309,68 @@ def test_canary_rollback_and_promote():
     assert "NextGen-Model" in current_cfg["champion_name"]
     assert current_cfg["enabled"] is False
 
+def test_retrain_curated_summary():
+    """Verify /retrain/curated-summary returns pool counts and class distribution."""
+    res = client.get("/retrain/curated-summary")
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_curated_images" in data
+    assert "total_curated_labels" in data
+    assert "class_distribution" in data
+    assert "ready_for_retraining" in data
+    assert isinstance(data["total_curated_images"], int)
+    assert isinstance(data["class_distribution"], dict)
+
+def test_retrain_trigger_and_status():
+    """Verify triggering asynchronous retraining, polling progress, SLA gate check, and canary mount."""
+    payload = {
+        "epochs": 3,
+        "batch_size": 8,
+        "auto_mount_canary": True,
+        "canary_split_percent": 25.0,
+        "sla_max_latency_ms": 40.0,
+        "dry_run": True
+    }
+    trigger_res = client.post("/retrain/trigger", json=payload)
+    assert trigger_res.status_code == 200
+    initial_status = trigger_res.json()
+    assert "job_id" in initial_status
+    assert initial_status["status"] in ["PENDING", "DATASET_PREP", "TRAINING", "GATE_EVALUATION", "CANARY_MOUNT", "COMPLETED"]
+
+    job_id = initial_status["job_id"]
+
+    # Poll until terminal state (COMPLETED or FAILED) with timeout
+    final_status = None
+    for _ in range(40):
+        time.sleep(0.1)
+        stat_res = client.get(f"/retrain/status/{job_id}")
+        assert stat_res.status_code == 200
+        stat_data = stat_res.json()
+        if stat_data["status"] in ["COMPLETED", "FAILED"]:
+            final_status = stat_data
+            break
+
+    assert final_status is not None, "Retraining job did not finish within timeout"
+    assert final_status["status"] == "COMPLETED"
+    assert final_status["progress_percent"] == 100.0
+    assert final_status["gate_passed"] is True
+    assert final_status["canary_mounted"] is True
+    assert len(final_status["logs"]) > 0
+
+    # Test 404 for invalid job ID
+    err_res = client.get("/retrain/status/non_existent_retrain_job_xyz")
+    assert err_res.status_code == 404
+
+def test_retrain_jobs_list():
+    """Verify /retrain/jobs lists all executed background jobs."""
+    res = client.get("/retrain/jobs")
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_jobs" in data
+    assert "jobs" in data
+    assert data["total_jobs"] >= 1
+    assert any(j["status"] == "COMPLETED" for j in data["jobs"])
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -348,4 +411,10 @@ if __name__ == "__main__":
     print("  ✓ test_canary_routing_and_metrics passed")
     test_canary_rollback_and_promote()
     print("  ✓ test_canary_rollback_and_promote passed")
-    print("\n🎉 ALL 19 API TESTS PASSED SUCCESSFULLY!")
+    test_retrain_curated_summary()
+    print("  ✓ test_retrain_curated_summary passed")
+    test_retrain_trigger_and_status()
+    print("  ✓ test_retrain_trigger_and_status passed")
+    test_retrain_jobs_list()
+    print("  ✓ test_retrain_jobs_list passed")
+    print("\n🎉 ALL 22 API TESTS PASSED SUCCESSFULLY!")

@@ -124,3 +124,40 @@ class CanaryActionResponse(BaseModel):
     message: str
     config: CanaryConfig
 
+class CuratedDatasetSummary(BaseModel):
+    total_curated_images: int
+    total_curated_labels: int
+    class_distribution: Dict[str, int]
+    ready_for_retraining: bool
+
+class RetrainTriggerRequest(BaseModel):
+    epochs: int = Field(default=30, ge=1, le=200, description="Number of fine-tuning epochs")
+    batch_size: int = Field(default=16, ge=1, le=128, description="Training batch size")
+    base_model: str = Field(default="yolov8n.pt", description="Base checkpoint backbone")
+    auto_mount_canary: bool = Field(default=True, description="Automatically load candidate weights into Canary router if SLA gate passes")
+    canary_split_percent: float = Field(default=20.0, ge=0.0, le=100.0, description="Initial traffic split to canary (0-100%)")
+    sla_max_latency_ms: float = Field(default=30.0, description="P95 latency SLA budget threshold")
+    dry_run: bool = Field(default=False, description="Run in fast mock mode for automated testing")
+
+class RetrainJobStatus(BaseModel):
+    job_id: str
+    status: str = Field(..., description="Job lifecycle state: PENDING, DATASET_PREP, TRAINING, GATE_EVALUATION, CANARY_MOUNT, COMPLETED, FAILED")
+    progress_percent: float = Field(default=0.0, ge=0.0, le=100.0)
+    started_at: float
+    completed_at: Optional[float] = None
+    duration_sec: float = 0.0
+    epochs_total: int
+    current_epoch: int = 0
+    curated_samples_used: int = 0
+    map50: Optional[float] = None
+    gate_passed: Optional[bool] = None
+    candidate_weights_path: Optional[str] = None
+    canary_mounted: bool = False
+    message: str = ""
+    logs: List[str] = Field(default_factory=list)
+
+class RetrainJobListResponse(BaseModel):
+    total_jobs: int
+    jobs: List[RetrainJobStatus]
+
+

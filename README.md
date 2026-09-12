@@ -119,6 +119,7 @@ defect-detection/
 │   ├── severity.py             # Defect severity grading & QA action recommendation engine
 │   ├── certificate.py          # ISO Metallurgical quality inspection certificate generator (/audit/certificate)
 │   ├── canary.py               # Production A/B Canary traffic router, live SLA comparative telemetry & promotion engine
+│   ├── retrain.py              # Automated continuous retraining pipeline, SLA gate verification & canary deployment
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -512,6 +513,56 @@ curl http://localhost:8000/canary/metrics
 
 - **`POST /canary/rollback`**: Emergency kill-switch. Instantly redirects 100% of factory traffic to primary Champion.
 - **`POST /canary/promote`**: Zero-downtime model promotion. Sets candidate model as the new primary Champion and resets canary traffic to 0%.
+
+---
+
+### `GET /retrain/curated-summary`
+
+Returns metrics and defect class breakdown of verified active learning samples ready for fine-tuning in `data/curated_training_set/`:
+
+```bash
+curl http://localhost:8000/retrain/curated-summary
+```
+
+**Response:**
+```json
+{
+  "total_curated_images": 24,
+  "total_curated_labels": 24,
+  "class_distribution": {
+    "crazing": 8,
+    "scratches": 12,
+    "patches": 4
+  },
+  "ready_for_retraining": true
+}
+```
+
+---
+
+### `POST /retrain/trigger`
+
+Asynchronously launches background continuous retraining, preparing dataset YAML, running YOLO fine-tuning, benchmarking against SLA latency/accuracy gates, and auto-mounting verified candidate weights into the Canary router:
+
+```bash
+curl -X POST http://localhost:8000/retrain/trigger \
+  -H "Content-Type: application/json" \
+  -d '{
+    "epochs": 20,
+    "batch_size": 16,
+    "auto_mount_canary": true,
+    "canary_split_percent": 20.0,
+    "sla_max_latency_ms": 30.0,
+    "dry_run": false
+  }'
+```
+
+---
+
+### `GET /retrain/status/{job_id}` & `GET /retrain/jobs`
+
+- **`GET /retrain/status/{job_id}`**: Real-time polling endpoint reporting job lifecycle phase (`PENDING`, `DATASET_PREP`, `TRAINING`, `GATE_EVALUATION`, `CANARY_MOUNT`, `COMPLETED`, `FAILED`), progress percentage, streaming logs, SLA verification status, and canary deployment state.
+- **`GET /retrain/jobs`**: Returns chronological audit history of all retraining runs executed on the cluster.
 
 ---
 
