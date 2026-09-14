@@ -160,4 +160,79 @@ class RetrainJobListResponse(BaseModel):
     total_jobs: int
     jobs: List[RetrainJobStatus]
 
+# ── 6. Root Cause Analysis (RCA) & Maintenance Dispatch Schemas ────────────
+class SpatialLaneBreakdown(BaseModel):
+    left_edge_count: int = Field(default=0, description="Defects in 0-20% strip width")
+    center_count: int = Field(default=0, description="Defects in 20-80% strip width")
+    right_edge_count: int = Field(default=0, description="Defects in 80-100% strip width")
+    left_edge_percent: float = Field(default=0.0, description="Left edge defect share %")
+    center_percent: float = Field(default=0.0, description="Center defect share %")
+    right_edge_percent: float = Field(default=0.0, description="Right edge defect share %")
+    dominant_lane: str = Field(default="BALANCED", description="Dominant spatial lane: LEFT_EDGE, CENTER, RIGHT_EDGE, or BALANCED")
+
+class PeriodicPitchFinding(BaseModel):
+    pitch_detected: bool = Field(default=False, description="True if a repeating spatial pitch is detected")
+    dominant_pitch_mm: Optional[float] = Field(default=None, description="Dominant defect repeat pitch in mm")
+    recurrence_confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence in periodic recurrence")
+    suspect_roll_diameter_mm: Optional[float] = Field(default=None, description="Calculated work roll diameter D = Pitch / pi")
+    explanation: str = Field(default="No periodic recurrence detected.", description="Textual description of periodicity findings")
+
+class MachineFaultAttribution(BaseModel):
+    fault_code: str = Field(default="NORMAL", description="Diagnosed mechanical fault code")
+    suspect_subsystem: str = Field(default="NONE", description="Suspect machine subsystem or stand")
+    subsystem_label: str = Field(default="Line Operating Normally", description="Human-readable subsystem label")
+    fault_probability: float = Field(default=0.0, ge=0.0, le=100.0, description="Probability percentage")
+    severity: str = Field(default="LOW", description="Fault severity: LOW, MEDIUM, HIGH, CRITICAL")
+    root_cause_explanation: str = Field(default="", description="Detailed root cause explanation")
+    corrective_action: str = Field(default="", description="Recommended maintenance task")
+
+class RCADiagnosticsResponse(BaseModel):
+    analysis_timestamp_utc: float
+    total_analyzed_defects: int
+    spatial_lanes: SpatialLaneBreakdown
+    periodicity: PeriodicPitchFinding
+    primary_fault: MachineFaultAttribution
+    secondary_faults: List[MachineFaultAttribution] = Field(default_factory=list)
+    equipment_status: str = Field(default="OPTIMAL", description="Overall line status: OPTIMAL, WARNING, ACTION_REQUIRED, CRITICAL")
+
+class SpatialFlawPoint(BaseModel):
+    id: int
+    defect_class: str
+    confidence: float
+    x_norm: float = Field(..., ge=0.0, le=1.0, description="Normalized transverse position across strip width (0.0 = Left Edge, 1.0 = Right Edge)")
+    y_norm: float = Field(..., ge=0.0, description="Normalized longitudinal position or relative frame/timestamp offset")
+    station_id: str
+    lane: str
+
+class SpatialMapResponse(BaseModel):
+    total_points: int
+    strip_width_px: int = 200
+    flaws: List[SpatialFlawPoint]
+
+class CreateWorkOrderRequest(BaseModel):
+    suspect_subsystem: str = Field(..., description="Target machine subsystem (e.g. WORK_ROLL_STAND_02)")
+    fault_code: str = Field(default="UNSPECIFIED", description="Identified root cause fault code")
+    priority: str = Field(default="HIGH", description="Priority level: LOW, MEDIUM, HIGH, CRITICAL")
+    recommended_action: str = Field(..., description="Action instructions for maintenance team")
+    station_id: Optional[str] = Field(default="ALL_STATIONS", description="Originating line or inspection station")
+    notes: Optional[str] = Field(default="", description="Optional operator notes")
+
+class MaintenanceWorkOrder(BaseModel):
+    order_id: str
+    created_at: float
+    datetime_iso: str
+    suspect_subsystem: str
+    fault_code: str
+    priority: str
+    recommended_action: str
+    station_id: str
+    notes: str
+    status: str = Field(default="OPEN", description="Work order lifecycle status: OPEN, ACKNOWLEDGED, RESOLVED")
+    resolved_at: Optional[float] = None
+
+class WorkOrderListResponse(BaseModel):
+    total_orders: int
+    orders: List[MaintenanceWorkOrder]
+
+
 

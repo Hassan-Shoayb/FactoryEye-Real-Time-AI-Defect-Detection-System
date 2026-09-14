@@ -371,6 +371,79 @@ def test_retrain_jobs_list():
     assert data["total_jobs"] >= 1
     assert any(j["status"] == "COMPLETED" for j in data["jobs"])
 
+def test_rca_diagnostics_endpoint():
+    """Verify /rca/diagnostics returns spatial lane distribution, roll periodicity, and machine fault attribution."""
+    res = client.get("/rca/diagnostics?limit=50")
+    assert res.status_code == 200
+    data = res.json()
+    assert "analysis_timestamp_utc" in data
+    assert "total_analyzed_defects" in data
+    assert "spatial_lanes" in data
+    assert "periodicity" in data
+    assert "primary_fault" in data
+    assert "equipment_status" in data
+
+    lanes = data["spatial_lanes"]
+    assert "left_edge_percent" in lanes
+    assert "center_percent" in lanes
+    assert "right_edge_percent" in lanes
+    assert lanes["dominant_lane"] in ["LEFT_EDGE", "CENTER", "RIGHT_EDGE", "BALANCED"]
+
+    periodicity = data["periodicity"]
+    assert "pitch_detected" in periodicity
+    assert "recurrence_confidence" in periodicity
+    assert isinstance(periodicity["pitch_detected"], bool)
+
+    primary_fault = data["primary_fault"]
+    assert "fault_code" in primary_fault
+    assert "suspect_subsystem" in primary_fault
+    assert "fault_probability" in primary_fault
+    assert "severity" in primary_fault
+    assert "corrective_action" in primary_fault
+
+def test_rca_spatial_map_endpoint():
+    """Verify /rca/spatial-map returns normalized 2D flaw coordinates for cross-strip visualization."""
+    res = client.get("/rca/spatial-map?limit=50")
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_points" in data
+    assert "strip_width_px" in data
+    assert "flaws" in data
+    assert isinstance(data["flaws"], list)
+    if len(data["flaws"]) > 0:
+        flaw = data["flaws"][0]
+        assert "x_norm" in flaw
+        assert "y_norm" in flaw
+        assert 0.0 <= flaw["x_norm"] <= 1.0
+        assert flaw["lane"] in ["LEFT_EDGE", "CENTER", "RIGHT_EDGE"]
+
+def test_rca_work_orders_endpoints():
+    """Verify creating and listing predictive maintenance work orders."""
+    payload = {
+        "suspect_subsystem": "STAND_03_PINCH_ROLL",
+        "fault_code": "BEARING_OVERHEATING",
+        "priority": "HIGH",
+        "recommended_action": "Inspect lubrication pressure and replace bearing assembly",
+        "station_id": "STATION_01",
+        "notes": "Automated dispatch from unit test suite"
+    }
+    create_res = client.post("/rca/work-orders", json=payload)
+    assert create_res.status_code == 200
+    order = create_res.json()
+    assert "order_id" in order
+    assert order["order_id"].startswith("WO-")
+    assert order["suspect_subsystem"] == "STAND_03_PINCH_ROLL"
+    assert order["priority"] == "HIGH"
+    assert order["status"] == "OPEN"
+
+    list_res = client.get("/rca/work-orders")
+    assert list_res.status_code == 200
+    orders_data = list_res.json()
+    assert "total_orders" in orders_data
+    assert "orders" in orders_data
+    assert orders_data["total_orders"] >= 1
+    assert any(o["order_id"] == order["order_id"] for o in orders_data["orders"])
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -417,4 +490,10 @@ if __name__ == "__main__":
     print("  ✓ test_retrain_trigger_and_status passed")
     test_retrain_jobs_list()
     print("  ✓ test_retrain_jobs_list passed")
-    print("\n🎉 ALL 22 API TESTS PASSED SUCCESSFULLY!")
+    test_rca_diagnostics_endpoint()
+    print("  ✓ test_rca_diagnostics_endpoint passed")
+    test_rca_spatial_map_endpoint()
+    print("  ✓ test_rca_spatial_map_endpoint passed")
+    test_rca_work_orders_endpoints()
+    print("  ✓ test_rca_work_orders_endpoints passed")
+    print("\n🎉 ALL 25 API TESTS PASSED SUCCESSFULLY!")

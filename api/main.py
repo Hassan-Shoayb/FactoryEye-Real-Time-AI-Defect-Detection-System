@@ -18,11 +18,14 @@ from api.schemas import (
     PredictResponse, VideoPredictResponse, VideoFrameResult, HealthResponse, Detection,
     AuditQueryResponse, DefectStatsSummary, ActiveLearningSample, ActiveLearningReviewRequest,
     CanaryConfig, CanaryConfigUpdate, CanaryMetricsResponse, CanaryActionResponse,
-    CuratedDatasetSummary, RetrainTriggerRequest, RetrainJobStatus, RetrainJobListResponse
+    CuratedDatasetSummary, RetrainTriggerRequest, RetrainJobStatus, RetrainJobListResponse,
+    RCADiagnosticsResponse, SpatialMapResponse, CreateWorkOrderRequest,
+    MaintenanceWorkOrder, WorkOrderListResponse
 )
 from api.inference import engine
 from api.canary import canary_router
 from api.retrain import retraining_orchestrator
+from api.rca import rca_engine
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -209,6 +212,31 @@ async def list_retraining_jobs():
     """Lists history of all background model fine-tuning runs and their SLA gate outcomes."""
     jobs = retraining_orchestrator.list_jobs()
     return RetrainJobListResponse(total_jobs=len(jobs), jobs=jobs)
+
+# ── 3d. Root Cause Analysis & Maintenance Dispatch ─────────────────────────
+@app.get("/rca/diagnostics", response_model=RCADiagnosticsResponse, tags=["Root Cause Analysis & Maintenance"])
+async def get_rca_diagnostics(limit: int = Query(100, ge=1, le=500, description="Number of recent defects to analyze")):
+    """
+    Computes cross-strip transverse lane distribution, rolling pitch recurrence (roll eccentricity),
+    and attributes machine subsystem root cause faults.
+    """
+    return rca_engine.run_diagnostics(limit=limit)
+
+@app.get("/rca/spatial-map", response_model=SpatialMapResponse, tags=["Root Cause Analysis & Maintenance"])
+async def get_spatial_flaw_map(limit: int = Query(100, ge=1, le=500, description="Number of recent defects to map")):
+    """Returns 2D transverse and longitudinal normalized defect coordinates for strip scatter visualization."""
+    return rca_engine.get_spatial_map(limit=limit)
+
+@app.post("/rca/work-orders", response_model=MaintenanceWorkOrder, tags=["Root Cause Analysis & Maintenance"])
+async def create_maintenance_work_order(req: CreateWorkOrderRequest):
+    """Dispatches and persists a new predictive corrective maintenance work order."""
+    return rca_engine.create_work_order(req)
+
+@app.get("/rca/work-orders", response_model=WorkOrderListResponse, tags=["Root Cause Analysis & Maintenance"])
+async def list_maintenance_work_orders():
+    """Lists all active and historical maintenance work orders."""
+    orders = rca_engine.list_work_orders()
+    return WorkOrderListResponse(total_orders=len(orders), orders=orders)
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])

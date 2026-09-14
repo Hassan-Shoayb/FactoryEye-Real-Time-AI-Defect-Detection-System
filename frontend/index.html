@@ -566,6 +566,95 @@
                 </div>
             </div>
 
+            <!-- Automated Root Cause Analysis (RCA) & Equipment Health Card -->
+            <div class="card" style="border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(120, 53, 15, 0.12);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">🔬</span>
+                        <div class="card-title" style="margin-bottom: 0;">Automated Root Cause Analysis (RCA) & Equipment Health</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="rcaStatusBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; font-weight: 600;">OPTIMAL (ANALYSIS READY)</span>
+                        <button onclick="dispatchRCAWorkOrder()" class="btn" style="padding: 6px 14px; font-size: 12px; background: #d97706;">🛠️ Dispatch Work Order</button>
+                    </div>
+                </div>
+
+                <!-- Primary Diagnosed Subsystem Fault Banner -->
+                <div id="rcaPrimaryFaultBanner" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 14px; font-weight: 700; color: #fbbf24;" id="rcaFaultSubsystem">Line Operating Normally</span>
+                            <span id="rcaSeverityTag" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 600;">LOW</span>
+                        </div>
+                        <div style="font-size: 12px; font-family: monospace; color: var(--text-muted);">
+                            Fault Confidence: <span id="rcaConfidenceVal" style="color: #fbbf24; font-weight: 700;">--%</span>
+                        </div>
+                    </div>
+                    <div id="rcaRootCauseExp" style="font-size: 12px; color: var(--text-main); line-height: 1.4;">Zero active defect patterns detected. Mill stands operating within nominal tolerances.</div>
+                    <div style="font-size: 11px; color: #a78bfa; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+                        <span>🔧 <b>Corrective Action:</b></span>
+                        <span id="rcaCorrectiveAction">Maintain standard preventive maintenance schedule.</span>
+                    </div>
+                </div>
+
+                <!-- Transverse Strip Distribution & Periodic Roll Pitch Indicator -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                    <!-- Cross-Strip Transverse Distribution -->
+                    <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Cross-Strip Transverse Lane Density</span>
+                            <span id="rcaDominantLane" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(59, 130, 246, 0.2); color: var(--accent); font-weight: 600;">BALANCED</span>
+                        </div>
+                        <div style="display: flex; height: 22px; width: 100%; border-radius: 6px; overflow: hidden; background: rgba(0,0,0,0.3); border: 1px solid var(--border); font-size: 10px; font-weight: 700; line-height: 22px; text-align: center;">
+                            <div id="rcaLaneLeft" style="width: 33.3%; background: #3b82f6; color: white;">Left 33%</div>
+                            <div id="rcaLaneCenter" style="width: 33.4%; background: #10b981; color: white;">Center 33%</div>
+                            <div id="rcaLaneRight" style="width: 33.3%; background: #f59e0b; color: white;">Right 33%</div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
+                            <span>Left Edge (0–20%)</span>
+                            <span>Center (20–80%)</span>
+                            <span>Right Edge (80–100%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Periodic Roll Pitch Recurrence (Roll Eccentricity) -->
+                    <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Periodic Roll Recurrence (Eccentricity)</span>
+                            <span id="rcaPitchTag" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(100, 116, 139, 0.3); color: var(--text-muted); font-weight: 600;">APERIODIC</span>
+                        </div>
+                        <div style="display: flex; align-items: baseline; gap: 8px;">
+                            <span id="rcaPitchVal" style="font-size: 20px; font-weight: 700; color: #a78bfa;">-- mm</span>
+                            <span id="rcaRollDiaVal" style="font-size: 12px; color: var(--text-muted);">(Calculated Roll: -- mm)</span>
+                        </div>
+                        <div id="rcaPitchDesc" style="font-size: 11px; color: var(--text-muted); line-height: 1.3;">No harmonic rolling pitch detected across recent inspection defects.</div>
+                    </div>
+                </div>
+
+                <!-- Active & Recent Maintenance Work Orders Table -->
+                <div style="overflow-x: auto; margin-top: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Corrective Maintenance Work Orders</span>
+                        <span id="rcaOrdersCount" style="font-size: 11px; color: var(--text-muted);">0 Active Tickets</span>
+                    </div>
+                    <table style="font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Timestamp</th>
+                                <th>Subsystem</th>
+                                <th>Priority</th>
+                                <th>Recommended Action</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rcaOrdersBody">
+                            <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading maintenance dispatch records...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -731,7 +820,7 @@
                 const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
                 const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
 
-                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes] = await Promise.all([
+                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes, rcaDiagRes, rcaOrdersRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
                     fetch(defectsUrl),
                     fetch("/audit/stats/trends"),
@@ -740,7 +829,9 @@
                     fetch("/canary/config"),
                     fetch("/canary/metrics"),
                     fetch("/retrain/curated-summary"),
-                    fetch("/retrain/jobs")
+                    fetch("/retrain/jobs"),
+                    fetch("/rca/diagnostics"),
+                    fetch("/rca/work-orders")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
@@ -751,6 +842,8 @@
                 const canaryMet = await canaryMetRes.json();
                 const retrainSum = await retrainSumRes.json();
                 const retrainJobs = await retrainJobsRes.json();
+                const rcaDiag = await rcaDiagRes.json();
+                const rcaOrders = await rcaOrdersRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -914,6 +1007,85 @@
                         `).join('');
                     } else {
                         histTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No retraining jobs recorded yet.</td></tr>`;
+                    }
+                }
+
+                // Populate RCA Diagnostics
+                if (rcaDiag) {
+                    const rBadge = document.getElementById('rcaStatusBadge');
+                    if (rBadge) {
+                        rBadge.innerText = `${rcaDiag.equipment_status} (DIAGNOSTIC ACTIVE)`;
+                        if (rcaDiag.equipment_status === 'OPTIMAL') {
+                            rBadge.style.background = 'rgba(34, 197, 94, 0.2)';
+                            rBadge.style.color = 'var(--success)';
+                        } else if (rcaDiag.equipment_status === 'WARNING') {
+                            rBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+                            rBadge.style.color = '#fbbf24';
+                        } else {
+                            rBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                            rBadge.style.color = 'var(--danger)';
+                        }
+                    }
+
+                    const pf = rcaDiag.primary_fault;
+                    if (pf) {
+                        document.getElementById('rcaFaultSubsystem').innerText = pf.subsystem_label || pf.suspect_subsystem;
+                        document.getElementById('rcaConfidenceVal').innerText = (pf.fault_probability || 0).toFixed(1) + '%';
+                        document.getElementById('rcaRootCauseExp').innerText = pf.root_cause_explanation || 'No fault detected.';
+                        document.getElementById('rcaCorrectiveAction').innerText = pf.corrective_action || 'Maintain nominal inspection.';
+                        const sTag = document.getElementById('rcaSeverityTag');
+                        if (sTag) {
+                            sTag.innerText = pf.severity;
+                            sTag.style.background = pf.severity === 'CRITICAL' || pf.severity === 'HIGH' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.2)';
+                            sTag.style.color = pf.severity === 'CRITICAL' || pf.severity === 'HIGH' ? 'var(--danger)' : 'var(--success)';
+                        }
+                    }
+
+                    // Lanes
+                    const sl = rcaDiag.spatial_lanes;
+                    if (sl) {
+                        document.getElementById('rcaDominantLane').innerText = sl.dominant_lane;
+                        const lEl = document.getElementById('rcaLaneLeft');
+                        const cEl = document.getElementById('rcaLaneCenter');
+                        const rEl = document.getElementById('rcaLaneRight');
+                        if (lEl) { lEl.style.width = Math.max(5, sl.left_edge_percent) + '%'; lEl.innerText = `Left ${sl.left_edge_percent}%`; }
+                        if (cEl) { cEl.style.width = Math.max(5, sl.center_percent) + '%'; cEl.innerText = `Center ${sl.center_percent}%`; }
+                        if (rEl) { rEl.style.width = Math.max(5, sl.right_edge_percent) + '%'; rEl.innerText = `Right ${sl.right_edge_percent}%`; }
+                    }
+
+                    // Periodicity
+                    const pd = rcaDiag.periodicity;
+                    if (pd) {
+                        const pTag = document.getElementById('rcaPitchTag');
+                        if (pTag) {
+                            pTag.innerText = pd.pitch_detected ? 'PERIODIC DETECTED' : 'APERIODIC';
+                            pTag.style.background = pd.pitch_detected ? 'rgba(239, 68, 68, 0.25)' : 'rgba(100, 116, 139, 0.3)';
+                            pTag.style.color = pd.pitch_detected ? 'var(--danger)' : 'var(--text-muted)';
+                        }
+                        document.getElementById('rcaPitchVal').innerText = pd.pitch_detected ? `${pd.dominant_pitch_mm} mm` : '-- mm';
+                        document.getElementById('rcaRollDiaVal').innerText = pd.pitch_detected ? `(Calculated Roll: Ø${pd.suspect_roll_diameter_mm} mm)` : '(Calculated Roll: -- mm)';
+                        document.getElementById('rcaPitchDesc').innerText = pd.explanation || '';
+                    }
+                }
+
+                // Populate Work Orders Table
+                const ordersBody = document.getElementById('rcaOrdersBody');
+                if (ordersBody && rcaOrders && rcaOrders.orders) {
+                    const countEl = document.getElementById('rcaOrdersCount');
+                    if (countEl) countEl.innerText = `${rcaOrders.total_orders} Total Tickets`;
+                    if (rcaOrders.orders.length > 0) {
+                        ordersBody.innerHTML = rcaOrders.orders.map(o => `
+                            <tr>
+                                <td style="font-family: monospace; font-size: 11px;"><b>${o.order_id}</b></td>
+                                <td style="font-family: monospace; color: var(--text-muted); font-size: 11px;">${o.datetime_iso}</td>
+                                <td><span style="font-weight: 600; color: #fbbf24;">${o.suspect_subsystem}</span></td>
+                                <td><span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; background: ${o.priority === 'HIGH' || o.priority === 'CRITICAL' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)'}; color: ${o.priority === 'HIGH' || o.priority === 'CRITICAL' ? 'var(--danger)' : 'var(--accent)'};">${o.priority}</span></td>
+                                <td style="font-size: 11px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${o.recommended_action}</td>
+                                <td><span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 600;">${o.status}</span></td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        ordersBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No maintenance work orders logged yet.</td></tr>`;
                     }
                 }
             } catch (err) {
@@ -1123,6 +1295,43 @@
         function clearRetrainLogs() {
             const logsPre = document.getElementById('retrainConsoleLogs');
             if (logsPre) logsPre.innerText = "[CLEARED] Awaiting next pipeline trigger.";
+        }
+
+        async function dispatchRCAWorkOrder() {
+            try {
+                const diagRes = await fetch("/rca/diagnostics");
+                const diag = await diagRes.json();
+                const pf = diag.primary_fault || {};
+
+                const subsystem = pf.suspect_subsystem || "WORK_ROLL_STAND_02";
+                const action = pf.corrective_action || "Inspect rolls and guide alignment.";
+                const priority = pf.severity || "HIGH";
+                const fault_code = pf.fault_code || "WORK_ROLL_SURFACE_PITTING";
+
+                const res = await fetch("/rca/work-orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        suspect_subsystem: subsystem,
+                        fault_code: fault_code,
+                        priority: priority,
+                        recommended_action: action,
+                        station_id: "STATION_01",
+                        notes: `Auto-dispatched from Root Cause Analysis finding (${(pf.fault_probability || 85).toFixed(0)}% confidence).`
+                    })
+                });
+
+                if (res.ok) {
+                    const order = await res.json();
+                    alert(`✓ Maintenance Work Order ${order.order_id} successfully dispatched to CMMS!\nAssigned Subsystem: ${order.suspect_subsystem}\nPriority: ${order.priority}`);
+                    loadAuditLogs();
+                } else {
+                    const err = await res.json();
+                    alert("Failed to dispatch work order: " + (err.detail || "Server error"));
+                }
+            } catch (e) {
+                alert("Work order dispatch failed: " + e.message);
+            }
         }
 
         // Live WebSocket Streaming

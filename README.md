@@ -120,6 +120,7 @@ defect-detection/
 │   ├── certificate.py          # ISO Metallurgical quality inspection certificate generator (/audit/certificate)
 │   ├── canary.py               # Production A/B Canary traffic router, live SLA comparative telemetry & promotion engine
 │   ├── retrain.py              # Automated continuous retraining pipeline, SLA gate verification & canary deployment
+│   ├── rca.py                  # Automated Root Cause Analysis (RCA), defect spatial clustering & maintenance dispatch
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -563,6 +564,67 @@ curl -X POST http://localhost:8000/retrain/trigger \
 
 - **`GET /retrain/status/{job_id}`**: Real-time polling endpoint reporting job lifecycle phase (`PENDING`, `DATASET_PREP`, `TRAINING`, `GATE_EVALUATION`, `CANARY_MOUNT`, `COMPLETED`, `FAILED`), progress percentage, streaming logs, SLA verification status, and canary deployment state.
 - **`GET /retrain/jobs`**: Returns chronological audit history of all retraining runs executed on the cluster.
+
+---
+
+### `GET /rca/diagnostics`
+
+Returns real-time automated Root Cause Analysis (RCA) including cross-strip transverse lane distribution (Left Edge, Center Strip, Right Edge), roll eccentricity periodic pitch recurrence harmonics ($P = \pi \times D$), and diagnosed machine subsystem fault attribution:
+
+```bash
+curl http://localhost:8000/rca/diagnostics?limit=100
+```
+
+**Response:**
+```json
+{
+  "analysis_timestamp_utc": 1788814299.12,
+  "total_analyzed_defects": 84,
+  "spatial_lanes": {
+    "left_edge_count": 12,
+    "center_count": 62,
+    "right_edge_count": 10,
+    "left_edge_percent": 14.3,
+    "center_percent": 73.8,
+    "right_edge_percent": 11.9,
+    "dominant_lane": "CENTER"
+  },
+  "periodicity": {
+    "pitch_detected": true,
+    "dominant_pitch_mm": 314.2,
+    "recurrence_confidence": 0.88,
+    "suspect_roll_diameter_mm": 100.0,
+    "explanation": "Harmonic periodicity detected: Repeating defect mark every 314.2 mm, matching a Ø100mm Work Roll circumference."
+  },
+  "primary_fault": {
+    "fault_code": "WORK_ROLL_SURFACE_PITTING",
+    "suspect_subsystem": "WORK_ROLL_STAND_02",
+    "subsystem_label": "Work Roll Stand #2 (Top Roll)",
+    "fault_probability": 92.0,
+    "severity": "HIGH",
+    "root_cause_explanation": "Periodic mechanical imprint of pitted_surface detected along strip length. Indicates roll thermal fatigue cracking or work roll surface pitting.",
+    "corrective_action": "Schedule immediate roll grind or swap for Stand #2 Top Work Roll. Inspect cooling water nozzles for blockage."
+  },
+  "equipment_status": "ACTION_REQUIRED"
+}
+```
+
+---
+
+### `GET /rca/spatial-map`
+
+Returns normalized 2D defect coordinates across transverse strip width (0.0 to 1.0) and longitudinal progression for visual spatial defect scatter heatmaps:
+
+```bash
+curl http://localhost:8000/rca/spatial-map?limit=100
+```
+
+---
+
+### `POST /rca/work-orders` & `GET /rca/work-orders`
+
+- **`POST /rca/work-orders`**: Generates and persists a structured corrective maintenance work order dispatched directly to the plant's CMMS / maintenance team.
+- **`GET /rca/work-orders`**: Retrieves history of all active (`OPEN`, `ACKNOWLEDGED`, `RESOLVED`) maintenance work orders.
 
 ---
 
