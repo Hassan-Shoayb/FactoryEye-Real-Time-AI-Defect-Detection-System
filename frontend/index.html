@@ -655,6 +655,65 @@
                 </div>
             </div>
 
+            <!-- Cryptographic Quality Audit Ledger & Compliance Chain Card -->
+            <div class="card" style="border: 1px solid rgba(59, 130, 246, 0.4); background: rgba(30, 58, 138, 0.15);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">🔒</span>
+                        <div class="card-title" style="margin-bottom: 0;">Cryptographic Quality Audit Ledger & Compliance Chain</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="ledgerStatusBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 600;">IMMUTABLE & VERIFIED</span>
+                        <button onclick="verifyLedgerIntegrity()" class="btn" style="padding: 6px 14px; font-size: 12px; background: #2563eb;">🛡️ Audit Integrity</button>
+                    </div>
+                </div>
+
+                <!-- Ledger Provenance Summary Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Chain Block Height</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #60a5fa;" id="ledgerBlockHeight">Block #--</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><span id="ledgerSealedCount">0</span> sealed records protected</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Latest Sealed Block Hash</div>
+                        <div style="font-family: monospace; font-size: 11px; color: #e2e8f0; word-break: break-all;" id="ledgerLatestHash">sha256:--</div>
+                        <div style="font-size: 10px; color: #34d399; margin-top: 2px;">✓ Linked to Genesis Root</div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; justify-content: center; gap: 6px;">
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="sealBatchInput" value="BATCH-2026-COIL-A" placeholder="Batch ID (e.g. BATCH-01)" style="background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); padding: 6px 8px; border-radius: 4px; font-size: 11px; flex: 1; font-family: monospace;">
+                            <button onclick="sealBatchToLedger()" class="btn" style="padding: 6px 12px; font-size: 11px; background: #059669; white-space: nowrap;">🔒 Seal Batch</button>
+                        </div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Generates tamper-evident SHA-256 Merkle root & HMAC digital seal.</div>
+                    </div>
+                </div>
+
+                <!-- Chronological Ledger Block Explorer -->
+                <div style="overflow-x: auto; margin-top: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Immutable Block Explorer</span>
+                        <span id="ledgerBlocksCount" style="font-size: 11px; color: var(--text-muted);">-- Blocks Sealed</span>
+                    </div>
+                    <table style="font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th>Height</th>
+                                <th>Timestamp</th>
+                                <th>Batch ID</th>
+                                <th>Block Hash</th>
+                                <th>Merkle Root</th>
+                                <th>Records</th>
+                                <th>Seal Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerBlocksBody">
+                            <tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Loading ledger blocks...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -820,7 +879,7 @@
                 const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
                 const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
 
-                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes, rcaDiagRes, rcaOrdersRes] = await Promise.all([
+                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes, rcaDiagRes, rcaOrdersRes, ledgerStatusRes, ledgerBlocksRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
                     fetch(defectsUrl),
                     fetch("/audit/stats/trends"),
@@ -831,7 +890,9 @@
                     fetch("/retrain/curated-summary"),
                     fetch("/retrain/jobs"),
                     fetch("/rca/diagnostics"),
-                    fetch("/rca/work-orders")
+                    fetch("/rca/work-orders"),
+                    fetch("/ledger/status"),
+                    fetch("/ledger/blocks?limit=15")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
@@ -844,6 +905,8 @@
                 const retrainJobs = await retrainJobsRes.json();
                 const rcaDiag = await rcaDiagRes.json();
                 const rcaOrders = await rcaOrdersRes.json();
+                const ledgerStatus = await ledgerStatusRes.json();
+                const ledgerBlocks = await ledgerBlocksRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -1086,6 +1149,55 @@
                         `).join('');
                     } else {
                         ordersBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No maintenance work orders logged yet.</td></tr>`;
+                    }
+                }
+
+                // Populate Cryptographic Quality Audit Ledger
+                if (ledgerStatus) {
+                    const bhEl = document.getElementById('ledgerBlockHeight');
+                    if (bhEl) bhEl.innerText = `Block #${ledgerStatus.block_height}`;
+
+                    const scEl = document.getElementById('ledgerSealedCount');
+                    if (scEl) scEl.innerText = ledgerStatus.total_sealed_records;
+
+                    const lhEl = document.getElementById('ledgerLatestHash');
+                    if (lhEl) lhEl.innerText = ledgerStatus.latest_block_hash;
+
+                    const badge = document.getElementById('ledgerStatusBadge');
+                    if (badge) {
+                        if (ledgerStatus.chain_integrity === "VALID") {
+                            badge.innerText = "IMMUTABLE & VERIFIED";
+                            badge.style.background = "rgba(34, 197, 94, 0.2)";
+                            badge.style.color = "var(--success)";
+                        } else {
+                            badge.innerText = "TAMPER DETECTED";
+                            badge.style.background = "rgba(239, 68, 68, 0.2)";
+                            badge.style.color = "var(--danger)";
+                        }
+                    }
+                }
+
+                if (ledgerBlocks && ledgerBlocks.blocks) {
+                    const countEl = document.getElementById('ledgerBlocksCount');
+                    if (countEl) countEl.innerText = `${ledgerBlocks.total_blocks} Blocks Sealed`;
+
+                    const tbody = document.getElementById('ledgerBlocksBody');
+                    if (tbody) {
+                        if (ledgerBlocks.blocks.length > 0) {
+                            tbody.innerHTML = ledgerBlocks.blocks.map(b => `
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: 700; color: #60a5fa;">#${b.block_height}</td>
+                                    <td style="font-family: monospace; font-size: 11px; color: var(--text-muted);">${b.datetime_iso}</td>
+                                    <td><span style="font-weight: 600; color: #fbbf24; font-family: monospace;">${b.batch_id || 'GENESIS'}</span></td>
+                                    <td style="font-family: monospace; font-size: 11px; color: #e2e8f0;" title="${b.block_hash}">${b.block_hash.substring(0, 12)}...${b.block_hash.substring(56)}</td>
+                                    <td style="font-family: monospace; font-size: 11px; color: #94a3b8;" title="${b.merkle_root}">${b.merkle_root.substring(0, 10)}...${b.merkle_root.substring(58)}</td>
+                                    <td style="font-family: monospace;">${b.record_count}</td>
+                                    <td><span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 600;">SEALED ✓</span></td>
+                                </tr>
+                            `).join('');
+                        } else {
+                            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No ledger blocks found.</td></tr>`;
+                        }
                     }
                 }
             } catch (err) {
@@ -1331,6 +1443,58 @@
                 }
             } catch (e) {
                 alert("Work order dispatch failed: " + e.message);
+            }
+        }
+
+        // Cryptographic Quality Audit Ledger & Merkle Compliance Functions
+        async function verifyLedgerIntegrity() {
+            try {
+                const res = await fetch("/ledger/verify");
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                if (data.verified) {
+                    alert(`✅ LEDGER INTEGRITY AUDIT PASSED!\n\n` +
+                          `Chain Length: ${data.total_blocks_verified} blocks verified\n` +
+                          `Chain Status: ${data.chain_status}\n` +
+                          `Status: 100% Cryptographically Intact\n` +
+                          `Genesis, SHA-256 Merkle proofs & HMAC digital signatures validated.`);
+                } else {
+                    alert(`⚠️ LEDGER TAMPER DETECTED!\n\n` +
+                          `Chain Length: ${data.total_blocks_verified} blocks\n` +
+                          `Status: INTEGRITY COMPROMISED\n` +
+                          `Findings:\n` + (data.findings || []).map(f => `- Block #${f.block_height}: ${f.details}`).join('\n'));
+                }
+                loadAuditLogs();
+            } catch (err) {
+                alert("Ledger audit verification failed: " + err.message);
+            }
+        }
+
+        async function sealBatchToLedger() {
+            const input = document.getElementById('sealBatchInput');
+            const batchId = (input ? input.value : "").trim() || `BATCH-${Date.now()}`;
+            try {
+                const res = await fetch("/ledger/seal", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ batch_id: batchId, notes: "Cryptographic batch seal from UI console" })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Batch seal failed: " + (err.detail || "Server error"));
+                    return;
+                }
+                const newBlock = await res.json();
+                alert(`🔒 BATCH SEALED TO LEDGER!\n\n` +
+                      `Block Height: #${newBlock.block_height}\n` +
+                      `Batch ID: ${newBlock.batch_id}\n` +
+                      `Sealed Records: ${newBlock.record_count}\n` +
+                      `Merkle Root: ${newBlock.merkle_root.substring(0, 16)}...\n` +
+                      `Block Hash: ${newBlock.block_hash.substring(0, 16)}...`);
+                loadAuditLogs();
+            } catch (err) {
+                alert("Seal batch request failed: " + err.message);
             }
         }
 

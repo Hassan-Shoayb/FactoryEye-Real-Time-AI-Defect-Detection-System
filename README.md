@@ -121,6 +121,7 @@ defect-detection/
 │   ├── canary.py               # Production A/B Canary traffic router, live SLA comparative telemetry & promotion engine
 │   ├── retrain.py              # Automated continuous retraining pipeline, SLA gate verification & canary deployment
 │   ├── rca.py                  # Automated Root Cause Analysis (RCA), defect spatial clustering & maintenance dispatch
+│   ├── ledger.py               # Cryptographic tamper-evident quality audit ledger, SHA-256 Merkle root engine & HMAC digital seal
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -628,6 +629,42 @@ curl http://localhost:8000/rca/spatial-map?limit=100
 
 ---
 
+### `GET /ledger/status` & `GET /ledger/verify`
+
+Provides cryptographic audit and tamper verification of the immutable ledger chain:
+- **`GET /ledger/status`**: Returns current blockchain height, genesis hash, latest block hash, and total sealed defect records.
+- **`GET /ledger/verify`**: Traverses the entire cryptographic hash-chain, recomputing block SHA-256 digests, validating previous block linkage, and verifying HMAC digital signatures to guarantee zero alterations.
+
+```bash
+curl http://localhost:8000/ledger/verify
+```
+
+```json
+{
+  "verified": true,
+  "total_blocks_verified": 3,
+  "chain_status": "CHAIN_IMMUTABLE_AND_VALID",
+  "audit_timestamp_utc": 1789551300.0,
+  "message": "✓ All 3 blocks in cryptographic chain verified successfully. Zero alterations detected.",
+  "findings": []
+}
+```
+
+---
+
+### `POST /ledger/seal` & `GET /ledger/blocks`
+
+- **`POST /ledger/seal`**: Cryptographically seals an inspection batch and its defect records into an immutable block with a SHA-256 Merkle tree root and HMAC digital signature.
+- **`GET /ledger/blocks`**: Chronological block explorer returning all sealed blocks in the immutable chain.
+
+```bash
+curl -X POST http://localhost:8000/ledger/seal \
+  -H "Content-Type: application/json" \
+  -d '{"batch_id": "BATCH-2026-COIL-A", "notes": "Production cold-rolled coil certified."}'
+```
+
+---
+
 ## MLflow Experiment Tracking
 
 Every training run is automatically logged. To compare runs:
@@ -683,7 +720,7 @@ docker compose up --build --force-recreate
 
 ## Running Tests
 
-FactoryEye includes an end-to-end integration and API verification suite testing all 19 endpoints and subsystems:
+FactoryEye includes an end-to-end integration and API verification suite testing all 28 endpoints and subsystems:
 
 ```bash
 make test
@@ -713,8 +750,17 @@ Running FactoryEye API Tests...
   ✓ test_canary_config_endpoints passed
   ✓ test_canary_routing_and_metrics passed
   ✓ test_canary_rollback_and_promote passed
+  ✓ test_retrain_curated_summary passed
+  ✓ test_retrain_trigger_and_status passed
+  ✓ test_retrain_jobs_list passed
+  ✓ test_rca_diagnostics_endpoint passed
+  ✓ test_rca_spatial_map_endpoint passed
+  ✓ test_rca_work_orders_endpoints passed
+  ✓ test_ledger_status_and_blocks passed
+  ✓ test_ledger_seal_batch passed
+  ✓ test_ledger_tamper_verification passed
 
-🎉 ALL 19 API TESTS PASSED SUCCESSFULLY!
+🎉 ALL 28 API TESTS PASSED SUCCESSFULLY!
 ```
 
 Tests use FastAPI's `TestClient` — no server needs to be running.

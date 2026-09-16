@@ -14,6 +14,7 @@ from api.config import API_VERSION
 from api.database import audit_db
 from api.drift import drift_monitor
 from api.canary import canary_router
+from api.ledger import ledger_engine
 
 client = TestClient(app)
 
@@ -444,6 +445,85 @@ def test_rca_work_orders_endpoints():
     assert orders_data["total_orders"] >= 1
     assert any(o["order_id"] == order["order_id"] for o in orders_data["orders"])
 
+def test_ledger_status_and_blocks():
+    """Verify cryptographic audit ledger status and chronological block list."""
+    status_res = client.get("/ledger/status")
+    assert status_res.status_code == 200
+    status_data = status_res.json()
+    assert "block_height" in status_data
+    assert "genesis_hash" in status_data
+    assert "latest_block_hash" in status_data
+    assert status_data["chain_integrity"] == "VALID"
+    assert status_data["block_height"] >= 1
+
+    blocks_res = client.get("/ledger/blocks")
+    assert blocks_res.status_code == 200
+    blocks_data = blocks_res.json()
+    assert "total_blocks" in blocks_data
+    assert "blocks" in blocks_data
+    assert blocks_data["total_blocks"] >= 2
+    genesis_block = blocks_data["blocks"][0]
+    assert genesis_block["block_height"] == 0
+    assert genesis_block["previous_hash"] == "0" * 64
+    assert len(genesis_block["merkle_root"]) == 64
+    assert len(genesis_block["signature"]) == 64
+
+def test_ledger_seal_batch():
+    """Verify cryptographically sealing an inspection batch and embedding seal in ISO certificate."""
+    test_batch_id = "BATCH-TEST-COIL-SEAL-01"
+    seal_res = client.post("/ledger/seal", json={
+        "batch_id": test_batch_id,
+        "station_id": "STATION_01",
+        "notes": "Automated compliance sealing unit test"
+    })
+    assert seal_res.status_code == 200
+    sealed_block = seal_res.json()
+    assert sealed_block["batch_id"] == test_batch_id
+    assert sealed_block["block_height"] >= 2
+    assert len(sealed_block["block_hash"]) == 64
+    assert len(sealed_block["merkle_root"]) == 64
+    assert len(sealed_block["signature"]) == 64
+
+    # Verify certificate now embeds cryptographic seal
+    cert_res = client.get(f"/audit/certificate?batch_id={test_batch_id}")
+    assert cert_res.status_code == 200
+    html_text = cert_res.text
+    assert "CRYPTOGRAPHIC QUALITY AUDIT LEDGER SEAL" in html_text
+    assert sealed_block["merkle_root"] in html_text
+    assert "IMMUTABLE HASH-CHAIN VERIFIED" in html_text
+
+def test_ledger_tamper_verification():
+    """Verify end-to-end cryptographic verification traversal and tamper detection."""
+    # 1. Nominal state: chain should verify 100% clean
+    verify_res = client.get("/ledger/verify")
+    assert verify_res.status_code == 200
+    verify_data = verify_res.json()
+    assert verify_data["verified"] is True
+    assert verify_data["chain_status"] == "CHAIN_IMMUTABLE_AND_VALID"
+    assert verify_data["total_blocks_verified"] >= 2
+    assert len(verify_data["findings"]) == 0
+
+    # 2. Tamper simulation: mutate a block hash in the chain and verify detection
+    target_block = ledger_engine.blocks[-1]
+    original_hash = target_block["block_hash"]
+    try:
+        target_block["block_hash"] = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        tamper_res = client.get("/ledger/verify")
+        assert tamper_res.status_code == 200
+        tamper_data = tamper_res.json()
+        assert tamper_data["verified"] is False
+        assert tamper_data["chain_status"] == "TAMPER_DETECTED"
+        assert len(tamper_data["findings"]) > 0
+        assert any(f["block_height"] == target_block["block_height"] for f in tamper_data["findings"])
+    finally:
+        # Restore integrity
+        target_block["block_hash"] = original_hash
+
+    # 3. Verify restored chain is valid again
+    clean_res = client.get("/ledger/verify")
+    assert clean_res.status_code == 200
+    assert clean_res.json()["verified"] is True
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -496,4 +576,10 @@ if __name__ == "__main__":
     print("  ✓ test_rca_spatial_map_endpoint passed")
     test_rca_work_orders_endpoints()
     print("  ✓ test_rca_work_orders_endpoints passed")
-    print("\n🎉 ALL 25 API TESTS PASSED SUCCESSFULLY!")
+    test_ledger_status_and_blocks()
+    print("  ✓ test_ledger_status_and_blocks passed")
+    test_ledger_seal_batch()
+    print("  ✓ test_ledger_seal_batch passed")
+    test_ledger_tamper_verification()
+    print("  ✓ test_ledger_tamper_verification passed")
+    print("\n🎉 ALL 28 API TESTS PASSED SUCCESSFULLY!")

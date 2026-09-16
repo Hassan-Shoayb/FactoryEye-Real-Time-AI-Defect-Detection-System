@@ -234,5 +234,53 @@ class WorkOrderListResponse(BaseModel):
     total_orders: int
     orders: List[MaintenanceWorkOrder]
 
+# ── 7. Cryptographic Quality Audit Ledger Schemas ───────────────────────────
+class LedgerBlock(BaseModel):
+    block_height: int = Field(..., ge=0, description="Sequential monotonic block index")
+    block_hash: str = Field(..., description="SHA-256 hash of this block header and payload")
+    previous_hash: str = Field(..., description="SHA-256 hash of the preceding block (genesis uses zeros)")
+    merkle_root: str = Field(..., description="SHA-256 Merkle tree root of defect records sealed in this block")
+    timestamp_utc: float = Field(..., description="Block creation timestamp")
+    datetime_iso: str = Field(..., description="ISO 8601 UTC timestamp")
+    batch_id: str = Field(..., description="Production coil or inspection batch identifier")
+    record_count: int = Field(default=0, ge=0, description="Number of defect records sealed in this block")
+    signature: str = Field(..., description="HMAC-SHA256 digital provenance signature")
+    sealed_by: str = Field(default="FactoryEye-Immutability-Engine", description="Authority or operator that sealed block")
+    notes: Optional[str] = Field(default="", description="Operator batch sealing notes")
+
+class LedgerStatusResponse(BaseModel):
+    block_height: int = Field(..., ge=0, description="Latest sealed block height")
+    genesis_hash: str = Field(..., description="Hash of the genesis block")
+    latest_block_hash: str = Field(..., description="Hash of the latest sealed block")
+    total_sealed_records: int = Field(default=0, ge=0, description="Total defect events cryptographically sealed")
+    chain_integrity: str = Field(default="VALID", description="Chain status: VALID, VERIFIED, or TAMPER_DETECTED")
+    last_verified_at: Optional[float] = None
+
+class SealBatchRequest(BaseModel):
+    batch_id: str = Field(default="BATCH-2026-NEU-01", description="Production coil or inspection batch identifier")
+    station_id: Optional[str] = Field(default="ALL_STATIONS", description="Originating inspection station")
+    notes: Optional[str] = Field(default="Routine production batch cryptographic sealing.", description="Sealing notes")
+
+class TamperAuditFinding(BaseModel):
+    block_height: int
+    batch_id: str
+    expected_hash: str
+    recomputed_hash: str
+    status: str = Field(..., description="PASS or TAMPERED")
+    details: str
+
+class LedgerVerifyResponse(BaseModel):
+    verified: bool = Field(..., description="True if 100% of blocks and Merkle roots match database records")
+    total_blocks_verified: int
+    chain_status: str = Field(..., description="CHAIN_IMMUTABLE_AND_VALID or TAMPER_DETECTED")
+    audit_timestamp_utc: float
+    message: str
+    findings: List[TamperAuditFinding] = Field(default_factory=list)
+
+class LedgerBlockListResponse(BaseModel):
+    total_blocks: int
+    blocks: List[LedgerBlock]
+
+
 
 

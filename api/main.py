@@ -20,12 +20,15 @@ from api.schemas import (
     CanaryConfig, CanaryConfigUpdate, CanaryMetricsResponse, CanaryActionResponse,
     CuratedDatasetSummary, RetrainTriggerRequest, RetrainJobStatus, RetrainJobListResponse,
     RCADiagnosticsResponse, SpatialMapResponse, CreateWorkOrderRequest,
-    MaintenanceWorkOrder, WorkOrderListResponse
+    MaintenanceWorkOrder, WorkOrderListResponse,
+    LedgerBlock, LedgerStatusResponse, SealBatchRequest,
+    LedgerVerifyResponse, LedgerBlockListResponse
 )
 from api.inference import engine
 from api.canary import canary_router
 from api.retrain import retraining_orchestrator
 from api.rca import rca_engine
+from api.ledger import ledger_engine
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -237,6 +240,31 @@ async def list_maintenance_work_orders():
     """Lists all active and historical maintenance work orders."""
     orders = rca_engine.list_work_orders()
     return WorkOrderListResponse(total_orders=len(orders), orders=orders)
+
+# ── 3e. Cryptographic Quality Audit Ledger & Compliance ───────────────
+@app.get("/ledger/status", response_model=LedgerStatusResponse, tags=["Cryptographic Quality Ledger"])
+async def get_ledger_status():
+    """Returns current blockchain ledger block height, genesis hash, and chain status."""
+    return ledger_engine.get_status()
+
+@app.get("/ledger/verify", response_model=LedgerVerifyResponse, tags=["Cryptographic Quality Ledger"])
+async def verify_ledger_integrity():
+    """
+    Performs end-to-end cryptographic audit verifying all blocks, Merkle roots,
+    and HMAC digital signatures against raw database inspection records.
+    """
+    return ledger_engine.verify_chain()
+
+@app.post("/ledger/seal", response_model=LedgerBlock, tags=["Cryptographic Quality Ledger"])
+async def seal_batch_into_ledger(req: SealBatchRequest):
+    """Cryptographically seals an inspection batch and its defect records into an immutable block."""
+    return ledger_engine.seal_batch(req)
+
+@app.get("/ledger/blocks", response_model=LedgerBlockListResponse, tags=["Cryptographic Quality Ledger"])
+async def list_ledger_blocks():
+    """Lists all cryptographically sealed blocks in the immutable chain."""
+    blocks = ledger_engine.list_blocks()
+    return LedgerBlockListResponse(total_blocks=len(blocks), blocks=blocks)
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])
