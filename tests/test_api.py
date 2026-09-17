@@ -524,6 +524,58 @@ def test_ledger_tamper_verification():
     assert clean_res.status_code == 200
     assert clean_res.json()["verified"] is True
 
+def test_digital_twin_coil_geometry():
+    """Verify analytical coil physics: outer diameter expansion, weight, and wrap count."""
+    res = client.get("/digital-twin/coil-geometry?strip_length_m=1200&strip_thickness_mm=1.2&inner_diameter_mm=508")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["strip_length_m"] == 1200.0
+    assert data["inner_diameter_mm"] == 508.0
+    assert data["outer_diameter_mm"] > 1400.0
+    assert data["total_wraps"] > 300
+    assert data["coil_weight_tonnes"] > 10.0
+    assert data["coil_build_up_ratio"] > 2.5
+
+def test_digital_twin_defect_profile():
+    """Verify longitudinal flaw density mapping, 10m segment zoning, and quality grading."""
+    res = client.get("/digital-twin/defect-profile?batch_id=BATCH-TEST-COIL-TWIN&strip_length_m=1000")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["batch_id"] == "BATCH-TEST-COIL-TWIN"
+    assert data["total_strip_length_m"] == 1000.0
+    assert data["total_segments"] == 100
+    assert len(data["segments"]) == 100
+    assert "overall_coil_grade" in data
+    assert "defect_density_per_100m" in data
+    assert "flaws" in data
+    assert all("wrap_index" in f and "wrap_radius_mm" in f for f in data["flaws"])
+
+def test_digital_twin_shear_cut_optimization():
+    """Verify automated flying shear cut schedule optimization and prime yield calculation."""
+    payload = {
+        "batch_id": "BATCH-TEST-COIL-TWIN",
+        "min_prime_length_m": 200.0,
+        "max_tolerable_flaws_per_segment": 1
+    }
+    res = client.post("/digital-twin/shear-cut-plan", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["batch_id"] == "BATCH-TEST-COIL-TWIN"
+    assert "prime_yield_percent" in data
+    assert "secondary_yield_percent" in data
+    assert "scrap_loss_percent" in data
+    assert round(data["prime_yield_percent"] + data["secondary_yield_percent"] + data["scrap_loss_percent"]) == 100
+    assert "cut_schedule" in data
+    assert len(data["cut_schedule"]) >= 1
+
+    # Verify CQM export
+    export_res = client.get("/digital-twin/export-cqm?batch_id=BATCH-TEST-COIL-TWIN")
+    assert export_res.status_code == 200
+    cqm_data = export_res.json()
+    assert cqm_data["format_version"] == "CQM-2026-V1.0"
+    assert "geometry" in cqm_data
+    assert "shear_cut_plan" in cqm_data
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -582,4 +634,10 @@ if __name__ == "__main__":
     print("  ✓ test_ledger_seal_batch passed")
     test_ledger_tamper_verification()
     print("  ✓ test_ledger_tamper_verification passed")
-    print("\n🎉 ALL 28 API TESTS PASSED SUCCESSFULLY!")
+    test_digital_twin_coil_geometry()
+    print("  ✓ test_digital_twin_coil_geometry passed")
+    test_digital_twin_defect_profile()
+    print("  ✓ test_digital_twin_defect_profile passed")
+    test_digital_twin_shear_cut_optimization()
+    print("  ✓ test_digital_twin_shear_cut_optimization passed")
+    print("\n🎉 ALL 31 API TESTS PASSED SUCCESSFULLY!")

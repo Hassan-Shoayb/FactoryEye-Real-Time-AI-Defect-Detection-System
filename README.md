@@ -122,6 +122,7 @@ defect-detection/
 │   ├── retrain.py              # Automated continuous retraining pipeline, SLA gate verification & canary deployment
 │   ├── rca.py                  # Automated Root Cause Analysis (RCA), defect spatial clustering & maintenance dispatch
 │   ├── ledger.py               # Cryptographic tamper-evident quality audit ledger, SHA-256 Merkle root engine & HMAC digital seal
+│   ├── digital_twin.py         # Coil digital twin 3D/2.5D surface topology & automated flying shear-cut plan optimizer
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -665,6 +666,46 @@ curl -X POST http://localhost:8000/ledger/seal \
 
 ---
 
+### `GET /digital-twin/coil-geometry` & `GET /digital-twin/defect-profile`
+
+Provides 2.5D/3D physical coiler topology and longitudinal flaw density profiling:
+- **`GET /digital-twin/coil-geometry`**: Computes Archimedean spiral winding dimensions (Outer Diameter $OD$, coil volume, total weight in tonnes, total wrap laps, and build-up ratio).
+- **`GET /digital-twin/defect-profile`**: Discretizes the continuous strip into 10-meter segments and classifies each segment into `GRADE_A_PRIME`, `GRADE_B_COMMERCIAL`, or `SCRAP_REJECT`.
+
+```bash
+curl "http://localhost:8000/digital-twin/coil-geometry?strip_length_m=1200&strip_thickness_mm=1.2&inner_diameter_mm=508"
+```
+
+```json
+{
+  "strip_length_m": 1200.0,
+  "strip_width_mm": 1250.0,
+  "strip_thickness_mm": 1.2,
+  "inner_diameter_mm": 508.0,
+  "outer_diameter_mm": 1564.2,
+  "coil_volume_m3": 1.8,
+  "coil_weight_kg": 14130.0,
+  "coil_weight_tonnes": 14.13,
+  "total_wraps": 440,
+  "coil_build_up_ratio": 3.08
+}
+```
+
+---
+
+### `POST /digital-twin/shear-cut-plan` & `GET /digital-twin/export-cqm`
+
+- **`POST /digital-twin/shear-cut-plan`**: Optimizes flying shear cut coordinates along the continuous strip to excise defect clusters while maximizing continuous Prime Grade-A sections ($\ge L_{\text{min}}$).
+- **`GET /digital-twin/export-cqm`**: Generates and downloads standardized Coil Quality Map (CQM) JSON for MES, ERP, and CNC flying shear PLCs.
+
+```bash
+curl -X POST http://localhost:8000/digital-twin/shear-cut-plan \
+  -H "Content-Type: application/json" \
+  -d '{"batch_id": "BATCH-2026-COIL-A", "min_prime_length_m": 200.0}'
+```
+
+---
+
 ## MLflow Experiment Tracking
 
 Every training run is automatically logged. To compare runs:
@@ -720,7 +761,7 @@ docker compose up --build --force-recreate
 
 ## Running Tests
 
-FactoryEye includes an end-to-end integration and API verification suite testing all 28 endpoints and subsystems:
+FactoryEye includes an end-to-end integration and API verification suite testing all 31 endpoints and subsystems:
 
 ```bash
 make test
@@ -759,8 +800,11 @@ Running FactoryEye API Tests...
   ✓ test_ledger_status_and_blocks passed
   ✓ test_ledger_seal_batch passed
   ✓ test_ledger_tamper_verification passed
+  ✓ test_digital_twin_coil_geometry passed
+  ✓ test_digital_twin_defect_profile passed
+  ✓ test_digital_twin_shear_cut_optimization passed
 
-🎉 ALL 28 API TESTS PASSED SUCCESSFULLY!
+🎉 ALL 31 API TESTS PASSED SUCCESSFULLY!
 ```
 
 Tests use FastAPI's `TestClient` — no server needs to be running.

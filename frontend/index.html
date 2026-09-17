@@ -714,6 +714,106 @@
                 </div>
             </div>
 
+            <!-- Coil Digital Twin 3D/2.5D Surface Topology & Automated Shear-Cut Plan Card -->
+            <div class="card" style="border: 1px solid rgba(147, 51, 234, 0.4); background: rgba(88, 28, 135, 0.12);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">🌀</span>
+                        <div class="card-title" style="margin-bottom: 0;">Coil Digital Twin 3D/2.5D Surface Topology & Automated Shear-Cut Plan</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="twinCoilGradeBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 700;">GRADE A PRIME CERTIFIED</span>
+                        <button onclick="optimizeShearPlan()" class="btn" style="padding: 6px 14px; font-size: 12px; background: #7c3aed;">✂️ Optimize Shear Plan</button>
+                        <a href="/digital-twin/export-cqm" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">📥 Export CQM</a>
+                    </div>
+                </div>
+
+                <!-- Physical Coil Geometry & Winding Metrics -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Unwound Strip Length</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #a78bfa;" id="twinStripLength">1,200.0 m</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Width: 1,250 mm | Gauge: 1.2 mm</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Outer Diameter (OD)</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #38bdf8;" id="twinOuterDiameter">Ø 1,564.2 mm</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Core Mandrel: Ø 508.0 mm</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Total Coil Mass</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #34d399;" id="twinCoilWeight">14.13 Tonnes</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Steel Density: 7,850 kg/m³</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Coil Wrap Count</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #fbbf24;" id="twinTotalWraps">440 Laps</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Build-Up Ratio: <span id="twinBuildUp">3.08x</span></div>
+                    </div>
+                </div>
+
+                <!-- Longitudinal Strip Defect Tape & Quality Zoning -->
+                <div style="margin-bottom: 14px; background: rgba(15, 23, 42, 0.5); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Unrolled Strip Longitudinal Quality Tape (10m Segments)</span>
+                        <span id="twinDensityMetric" style="font-size: 11px; color: var(--text-muted);">-- Flaws / 100m</span>
+                    </div>
+
+                    <!-- Strip Tape Container -->
+                    <div id="twinStripTapeContainer" style="width: 100%; height: 26px; border-radius: 6px; background: #0f172a; border: 1px solid #334155; display: flex; overflow: hidden; position: relative;">
+                        <div style="width: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-muted);">Loading strip topology...</div>
+                    </div>
+
+                    <!-- Meter Scale Ticks -->
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); font-family: monospace; margin-top: 4px;">
+                        <span>0 m (Lead)</span>
+                        <span>300 m</span>
+                        <span>600 m</span>
+                        <span>900 m</span>
+                        <span id="twinEndMeterLabel">1,200 m (Tail)</span>
+                    </div>
+
+                    <!-- Quality Legend -->
+                    <div style="display: flex; gap: 16px; font-size: 11px; margin-top: 8px; align-items: center; flex-wrap: wrap;">
+                        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></span> Grade A Prime (&le; 1 flaw)</span>
+                        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;"></span> Grade B Commercial (&le; 2 flaws)</span>
+                        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 10px; height: 10px; background: #ef4444; border-radius: 2px;"></span> Scrap / Reject (&gt; 2 flaws or Critical)</span>
+                    </div>
+                </div>
+
+                <!-- Automated Flying Shear-Cut Schedule & Yield Recovery -->
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Automated Flying Shear-Cut Optimization Schedule</span>
+                        <div style="display: flex; gap: 12px; font-size: 11px;">
+                            <span style="color: var(--success);">Prime Yield: <b id="twinPrimeYield">--%</b></span>
+                            <span style="color: #fbbf24;">Commercial: <b id="twinSecondaryYield">--%</b></span>
+                            <span style="color: var(--danger);">Scrap Loss: <b id="twinScrapLoss">--%</b></span>
+                        </div>
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table style="font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th>Section ID</th>
+                                    <th>Start Meter</th>
+                                    <th>End Meter</th>
+                                    <th>Length</th>
+                                    <th>Weight</th>
+                                    <th>Flaw Count</th>
+                                    <th>Grade</th>
+                                    <th>Recommended Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="twinShearCutBody">
+                                <tr><td colspan="8" style="text-align:center; color:var(--text-muted);">Loading shear cut schedule...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -879,7 +979,7 @@
                 const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
                 const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
 
-                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes, rcaDiagRes, rcaOrdersRes, ledgerStatusRes, ledgerBlocksRes] = await Promise.all([
+                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes, rcaDiagRes, rcaOrdersRes, ledgerStatusRes, ledgerBlocksRes, twinGeoRes, twinProfRes, twinPlanRes] = await Promise.all([
                     fetch("/audit/stats/summary"),
                     fetch(defectsUrl),
                     fetch("/audit/stats/trends"),
@@ -892,7 +992,14 @@
                     fetch("/rca/diagnostics"),
                     fetch("/rca/work-orders"),
                     fetch("/ledger/status"),
-                    fetch("/ledger/blocks?limit=15")
+                    fetch("/ledger/blocks?limit=15"),
+                    fetch("/digital-twin/coil-geometry"),
+                    fetch("/digital-twin/defect-profile"),
+                    fetch("/digital-twin/shear-cut-plan", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ batch_id: "BATCH-2026-COIL-A", min_prime_length_m: 200.0 })
+                    })
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
@@ -907,6 +1014,9 @@
                 const rcaOrders = await rcaOrdersRes.json();
                 const ledgerStatus = await ledgerStatusRes.json();
                 const ledgerBlocks = await ledgerBlocksRes.json();
+                const twinGeo = await twinGeoRes.json();
+                const twinProf = await twinProfRes.json();
+                const twinPlan = await twinPlanRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -1197,6 +1307,88 @@
                             `).join('');
                         } else {
                             tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No ledger blocks found.</td></tr>`;
+                        }
+                    }
+                }
+
+                // Populate Coil Digital Twin & Shear-Cut Optimization
+                if (twinGeo) {
+                    const lEl = document.getElementById('twinStripLength');
+                    if (lEl) lEl.innerText = `${twinGeo.strip_length_m.toLocaleString()} m`;
+                    const odEl = document.getElementById('twinOuterDiameter');
+                    if (odEl) odEl.innerText = `Ø ${twinGeo.outer_diameter_mm.toFixed(1)} mm`;
+                    const wEl = document.getElementById('twinCoilWeight');
+                    if (wEl) wEl.innerText = `${twinGeo.coil_weight_tonnes.toFixed(2)} Tonnes`;
+                    const wrEl = document.getElementById('twinTotalWraps');
+                    if (wrEl) wrEl.innerText = `${twinGeo.total_wraps} Laps`;
+                    const buEl = document.getElementById('twinBuildUp');
+                    if (buEl) buEl.innerText = `${twinGeo.coil_build_up_ratio}x`;
+                    const emEl = document.getElementById('twinEndMeterLabel');
+                    if (emEl) emEl.innerText = `${twinGeo.strip_length_m.toLocaleString()} m (Tail)`;
+                }
+
+                if (twinProf) {
+                    const bgEl = document.getElementById('twinCoilGradeBadge');
+                    if (bgEl) {
+                        bgEl.innerText = twinProf.overall_coil_grade.replace(/_/g, ' ');
+                        if (twinProf.overall_coil_grade.includes('PRIME')) {
+                            bgEl.style.background = 'rgba(34, 197, 94, 0.2)';
+                            bgEl.style.color = 'var(--success)';
+                        } else if (twinProf.overall_coil_grade.includes('COMMERCIAL')) {
+                            bgEl.style.background = 'rgba(245, 158, 11, 0.2)';
+                            bgEl.style.color = '#fbbf24';
+                        } else {
+                            bgEl.style.background = 'rgba(239, 68, 68, 0.2)';
+                            bgEl.style.color = 'var(--danger)';
+                        }
+                    }
+
+                    const dmEl = document.getElementById('twinDensityMetric');
+                    if (dmEl) dmEl.innerText = `${twinProf.defect_density_per_100m} Flaws / 100m (${twinProf.flaws.length} Total)`;
+
+                    const tapeEl = document.getElementById('twinStripTapeContainer');
+                    if (tapeEl && twinProf.segments) {
+                        tapeEl.innerHTML = twinProf.segments.map(s => {
+                            const color = s.grade === 'GRADE_A_PRIME' ? '#10b981' : (s.grade === 'GRADE_B_COMMERCIAL' ? '#f59e0b' : '#ef4444');
+                            const title = `Segment #${s.segment_index} (${s.start_meter}m - ${s.end_meter}m): ${s.flaw_count} flaws [${s.grade}]`;
+                            return `<div title="${title}" style="flex: 1; height: 100%; background: ${color}; border-right: 1px solid rgba(0,0,0,0.25);"></div>`;
+                        }).join('');
+                    }
+                }
+
+                if (twinPlan) {
+                    const pyEl = document.getElementById('twinPrimeYield');
+                    if (pyEl) pyEl.innerText = `${twinPlan.prime_yield_percent}%`;
+                    const syEl = document.getElementById('twinSecondaryYield');
+                    if (syEl) syEl.innerText = `${twinPlan.secondary_yield_percent}%`;
+                    const slEl = document.getElementById('twinScrapLoss');
+                    if (slEl) slEl.innerText = `${twinPlan.scrap_loss_percent}%`;
+
+                    const schedBody = document.getElementById('twinShearCutBody');
+                    if (schedBody && twinPlan.cut_schedule) {
+                        if (twinPlan.cut_schedule.length > 0) {
+                            schedBody.innerHTML = twinPlan.cut_schedule.map(c => `
+                                <tr>
+                                    <td style="font-family: monospace; font-weight: 700; color: #a78bfa;">${c.section_id}</td>
+                                    <td style="font-family: monospace;">${c.start_meter} m</td>
+                                    <td style="font-family: monospace;">${c.end_meter} m</td>
+                                    <td style="font-family: monospace; font-weight: 600;">${c.length_m} m</td>
+                                    <td style="font-family: monospace;">${c.weight_tonnes} T</td>
+                                    <td style="font-family: monospace;">${c.flaw_count}</td>
+                                    <td>
+                                        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600; background: ${c.grade === 'GRADE_A_PRIME' ? 'rgba(16, 185, 129, 0.2)' : (c.grade === 'GRADE_B_COMMERCIAL' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)')}; color: ${c.grade === 'GRADE_A_PRIME' ? '#34d399' : (c.grade === 'GRADE_B_COMMERCIAL' ? '#fbbf24' : 'var(--danger)')};">
+                                            ${c.grade.replace('GRADE_', '')}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; background: ${c.action === 'PRIME_SHIPMENT' ? 'rgba(59, 130, 246, 0.2)' : (c.action === 'SECONDARY_OFFGRADE' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)')}; color: ${c.action === 'PRIME_SHIPMENT' ? '#60a5fa' : (c.action === 'SECONDARY_OFFGRADE' ? '#fbbf24' : 'var(--danger)')};">
+                                            ${c.action.replace(/_/g, ' ')}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `).join('');
+                        } else {
+                            schedBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No shear cuts required. Continuous prime coil.</td></tr>`;
                         }
                     }
                 }
@@ -1495,6 +1687,38 @@
                 loadAuditLogs();
             } catch (err) {
                 alert("Seal batch request failed: " + err.message);
+            }
+        }
+
+        // Coil Digital Twin & Flying Shear-Cut Optimization
+        async function optimizeShearPlan() {
+            const minPrimeStr = prompt("Enter minimum continuous Prime coil segment in meters (e.g. 200.0):", "200.0");
+            if (!minPrimeStr) return;
+            const minPrime = parseFloat(minPrimeStr) || 200.0;
+            try {
+                const res = await fetch("/digital-twin/shear-cut-plan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        batch_id: "BATCH-2026-COIL-A",
+                        min_prime_length_m: minPrime
+                    })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Shear cut optimization failed: " + (err.detail || "Server error"));
+                    return;
+                }
+                const plan = await res.json();
+                alert(`✂️ FLYING SHEAR CUT SCHEDULE OPTIMIZED!\n\n` +
+                      `Planned Cuts: ${plan.total_cuts_required} automated cuts\n` +
+                      `Prime Continuous Yield: ${plan.prime_yield_percent}% (${plan.prime_weight_tonnes} T)\n` +
+                      `Secondary / Offgrade: ${plan.secondary_yield_percent}%\n` +
+                      `Scrap Loss: ${plan.scrap_loss_percent}% (${plan.scrap_weight_tonnes} T)\n` +
+                      `Optimization Status: ${plan.execution_status}`);
+                loadAuditLogs();
+            } catch (e) {
+                alert("Optimization request failed: " + e.message);
             }
         }
 

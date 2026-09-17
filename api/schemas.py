@@ -281,6 +281,98 @@ class LedgerBlockListResponse(BaseModel):
     total_blocks: int
     blocks: List[LedgerBlock]
 
+# ── 8. Coil Digital Twin & Automated Shear-Cut Schemas ───────────────────────
+class CoilParameters(BaseModel):
+    strip_length_m: float = Field(default=1200.0, gt=0, description="Total continuous strip length in meters")
+    strip_width_mm: float = Field(default=1250.0, gt=0, description="Strip width in millimeters")
+    strip_thickness_mm: float = Field(default=1.2, gt=0, description="Gauge thickness in millimeters")
+    inner_diameter_mm: float = Field(default=508.0, gt=0, description="Mandrel inner diameter in millimeters (default 20 in)")
+    line_speed_mpm: float = Field(default=120.0, gt=0, description="Line recoiling speed in meters per minute")
+    steel_density_kg_m3: float = Field(default=7850.0, gt=0, description="Density of steel grade (default 7850 kg/m3)")
+
+class CoilGeometryResponse(BaseModel):
+    strip_length_m: float
+    strip_width_mm: float
+    strip_thickness_mm: float
+    inner_diameter_mm: float
+    outer_diameter_mm: float
+    coil_volume_m3: float
+    coil_weight_kg: float
+    coil_weight_tonnes: float
+    total_wraps: int
+    coil_build_up_ratio: float = Field(..., description="Ratio of Outer Diameter to Inner Diameter")
+
+class CoilFlawLocation(BaseModel):
+    flaw_id: int
+    defect_class: str
+    confidence: float
+    longitudinal_meter: float = Field(..., description="Longitudinal distance along unwound strip (meters)")
+    transverse_mm: float = Field(..., description="Transverse position across strip width (mm)")
+    wrap_index: int = Field(..., description="Wound coil layer index from mandrel (0 = innermost)")
+    wrap_radius_mm: float = Field(..., description="Radial distance from coil center (mm)")
+    severity_grade: str
+    severity_weight: float
+
+class CoilSegmentProfile(BaseModel):
+    segment_index: int
+    start_meter: float
+    end_meter: float
+    flaw_count: int
+    severity_score: float
+    dominant_defect: Optional[str] = None
+    grade: str = Field(..., description="GRADE_A_PRIME, GRADE_B_COMMERCIAL, or SCRAP_REJECT")
+
+class LongitudinalDefectProfileResponse(BaseModel):
+    batch_id: str
+    total_strip_length_m: float
+    segment_length_m: float = 10.0
+    total_segments: int
+    prime_segments_count: int
+    commercial_segments_count: int
+    scrap_segments_count: int
+    overall_coil_grade: str
+    defect_density_per_100m: float
+    flaws: List[CoilFlawLocation]
+    segments: List[CoilSegmentProfile]
+
+class ShearCutRequest(BaseModel):
+    batch_id: Optional[str] = Field(default="BATCH-2026-COIL-A", description="Inspection batch identifier")
+    min_prime_length_m: float = Field(default=200.0, ge=50.0, description="Minimum acceptable continuous prime coil length (meters)")
+    max_tolerable_flaws_per_segment: int = Field(default=1, ge=0, description="Max acceptable flaws per 10m segment for Grade A")
+    coil_params: Optional[CoilParameters] = None
+
+class ShearCutSegment(BaseModel):
+    section_id: str
+    cut_index: int
+    start_meter: float
+    end_meter: float
+    length_m: float
+    weight_tonnes: float
+    grade: str = Field(..., description="GRADE_A_PRIME, GRADE_B_COMMERCIAL, or SCRAP_REJECT")
+    action: str = Field(..., description="PRIME_SHIPMENT, SECONDARY_OFFGRADE, or SCRAP_EXCISE")
+    flaw_count: int
+
+class ShearCutPlanResponse(BaseModel):
+    batch_id: str
+    total_strip_length_m: float
+    total_cuts_required: int
+    prime_yield_percent: float
+    secondary_yield_percent: float
+    scrap_loss_percent: float
+    prime_weight_tonnes: float
+    scrap_weight_tonnes: float
+    cut_schedule: List[ShearCutSegment]
+    execution_status: str
+
+class CoilQualityMapExport(BaseModel):
+    format_version: str = "CQM-2026-V1.0"
+    generated_at_iso: str
+    batch_id: str
+    geometry: CoilGeometryResponse
+    profile_summary: Dict[str, Any]
+    shear_cut_plan: ShearCutPlanResponse
+
+
 
 
 

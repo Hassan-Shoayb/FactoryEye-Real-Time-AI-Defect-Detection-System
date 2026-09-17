@@ -22,13 +22,16 @@ from api.schemas import (
     RCADiagnosticsResponse, SpatialMapResponse, CreateWorkOrderRequest,
     MaintenanceWorkOrder, WorkOrderListResponse,
     LedgerBlock, LedgerStatusResponse, SealBatchRequest,
-    LedgerVerifyResponse, LedgerBlockListResponse
+    LedgerVerifyResponse, LedgerBlockListResponse,
+    CoilParameters, CoilGeometryResponse, LongitudinalDefectProfileResponse,
+    ShearCutRequest, ShearCutPlanResponse, CoilQualityMapExport
 )
 from api.inference import engine
 from api.canary import canary_router
 from api.retrain import retraining_orchestrator
 from api.rca import rca_engine
 from api.ledger import ledger_engine
+from api.digital_twin import digital_twin_engine
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -265,6 +268,56 @@ async def list_ledger_blocks():
     """Lists all cryptographically sealed blocks in the immutable chain."""
     blocks = ledger_engine.list_blocks()
     return LedgerBlockListResponse(total_blocks=len(blocks), blocks=blocks)
+
+# ── 3f. Coil Digital Twin 3D/2.5D Surface Topology & Shear-Cut ───────
+@app.get("/digital-twin/coil-geometry", response_model=CoilGeometryResponse, tags=["Coil Digital Twin"])
+async def get_coil_geometry(
+    strip_length_m: float = Query(1200.0, gt=0),
+    strip_width_mm: float = Query(1250.0, gt=0),
+    strip_thickness_mm: float = Query(1.2, gt=0),
+    inner_diameter_mm: float = Query(508.0, gt=0),
+    line_speed_mpm: float = Query(120.0, gt=0),
+    steel_density_kg_m3: float = Query(7850.0, gt=0)
+):
+    """Computes analytical coiler physics: outer diameter expansion, weight, and wrap layer count."""
+    params = CoilParameters(
+        strip_length_m=strip_length_m,
+        strip_width_mm=strip_width_mm,
+        strip_thickness_mm=strip_thickness_mm,
+        inner_diameter_mm=inner_diameter_mm,
+        line_speed_mpm=line_speed_mpm,
+        steel_density_kg_m3=steel_density_kg_m3
+    )
+    return digital_twin_engine.compute_coil_geometry(params)
+
+@app.get("/digital-twin/defect-profile", response_model=LongitudinalDefectProfileResponse, tags=["Coil Digital Twin"])
+async def get_longitudinal_defect_profile(
+    batch_id: str = Query("BATCH-2026-COIL-A", description="Inspection batch identifier"),
+    strip_length_m: float = Query(1200.0, gt=0),
+    strip_width_mm: float = Query(1250.0, gt=0),
+    strip_thickness_mm: float = Query(1.2, gt=0),
+    inner_diameter_mm: float = Query(508.0, gt=0)
+):
+    """Produces longitudinal flaw density profile and 10m segment quality classification."""
+    params = CoilParameters(
+        strip_length_m=strip_length_m,
+        strip_width_mm=strip_width_mm,
+        strip_thickness_mm=strip_thickness_mm,
+        inner_diameter_mm=inner_diameter_mm
+    )
+    return digital_twin_engine.get_longitudinal_profile(batch_id, params)
+
+@app.post("/digital-twin/shear-cut-plan", response_model=ShearCutPlanResponse, tags=["Coil Digital Twin"])
+async def optimize_shear_cut_plan(req: ShearCutRequest):
+    """Optimizes flying shear cut points to maximize continuous prime yield and excise defect clusters."""
+    return digital_twin_engine.compute_shear_cut_plan(req)
+
+@app.get("/digital-twin/export-cqm", response_model=CoilQualityMapExport, tags=["Coil Digital Twin"])
+async def export_coil_quality_map(
+    batch_id: str = Query("BATCH-2026-COIL-A", description="Inspection batch identifier")
+):
+    """Exports standardized Coil Quality Map (CQM) JSON for MES, ERP, and flying shear CNC controllers."""
+    return digital_twin_engine.export_coil_quality_map(batch_id)
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])
