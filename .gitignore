@@ -12,6 +12,7 @@ dataset/
 data/raw/
 data/processed/
 data/active_learning_queue/
+data/novel_flaw_candidates/
 data/synthetic_samples/
 data/batch_results/
 *.db

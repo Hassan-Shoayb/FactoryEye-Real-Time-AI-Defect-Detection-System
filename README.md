@@ -123,6 +123,7 @@ defect-detection/
 │   ├── rca.py                  # Automated Root Cause Analysis (RCA), defect spatial clustering & maintenance dispatch
 │   ├── ledger.py               # Cryptographic tamper-evident quality audit ledger, SHA-256 Merkle root engine & HMAC digital seal
 │   ├── digital_twin.py         # Coil digital twin 3D/2.5D surface topology & automated flying shear-cut plan optimizer
+│   ├── anomaly_detector.py     # Zero-shot edge anomaly detector, dual-domain FFT spectral residual & novel flaw discovery
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -706,6 +707,31 @@ curl -X POST http://localhost:8000/digital-twin/shear-cut-plan \
 
 ---
 
+### Zero-Shot Edge Anomaly Detection & Novel Flaw Discovery
+
+Industrial metal rolling and casting processes frequently encounter unseen or rare defect morphologies that supervised object detectors like YOLO have never been trained on. FactoryEye integrates a dual-domain Zero-Shot Edge Anomaly Engine:
+- **Dual-Domain Analysis**: Computes 2D Fast Fourier Transform (FFT) log-spectral residual saliency combined with spatial Sobel gradient variance in $< 20\text{ms}$ on CPU.
+- **Novel Flaw Quarantine**: Irregularities exceeding sensitivity thresholds ($\tau \ge 0.45$) with Shannon spectral entropy spikes are automatically quarantined into `data/novel_flaw_candidates/`.
+- **Human-in-the-Loop Triage**: Quality metallurgists can inspect isolated crops in the UI, assign new defect classes, and promote samples directly into the active learning retraining pipeline.
+
+**Anomaly Endpoints:**
+- **`POST /anomaly/detect`**: Multipart image inspection returning composite `anomaly_score`, `is_anomalous`, `spectral_entropy`, localized `anomaly_bboxes`, and Base64 Jet heatmap.
+- **`GET /anomaly/stats`**: Real-time telemetry including rolling mean anomaly score, OOD event rate, and texture baseline stability.
+- **`GET /anomaly/novel-flaws`**: Quarantined novel flaw candidate gallery.
+- **`GET /anomaly/novel-flaws/{filename}/crop`**: High-resolution localized thumbnail crop of candidate anomaly.
+- **`POST /anomaly/classify-novel`**: Triage action (`promote` to active retraining pool or `discard`).
+
+```bash
+# Scan surface for novel zero-shot anomalies
+curl -X POST "http://localhost:8000/anomaly/detect?threshold=0.40&quarantine=true" \
+  -F "file=@data/samples/sample_surface.jpg"
+
+# View real-time surface texture stability
+curl http://localhost:8000/anomaly/stats
+```
+
+---
+
 ## MLflow Experiment Tracking
 
 Every training run is automatically logged. To compare runs:
@@ -761,7 +787,7 @@ docker compose up --build --force-recreate
 
 ## Running Tests
 
-FactoryEye includes an end-to-end integration and API verification suite testing all 31 endpoints and subsystems:
+FactoryEye includes an end-to-end integration and API verification suite testing all 34 endpoints and subsystems:
 
 ```bash
 make test
@@ -803,8 +829,11 @@ Running FactoryEye API Tests...
   ✓ test_digital_twin_coil_geometry passed
   ✓ test_digital_twin_defect_profile passed
   ✓ test_digital_twin_shear_cut_optimization passed
+  ✓ test_anomaly_detect_endpoint passed
+  ✓ test_anomaly_stats_and_novel_pool passed
+  ✓ test_anomaly_classify_and_promote passed
 
-🎉 ALL 31 API TESTS PASSED SUCCESSFULLY!
+🎉 ALL 34 API TESTS PASSED SUCCESSFULLY!
 ```
 
 Tests use FastAPI's `TestClient` — no server needs to be running.
@@ -846,6 +875,7 @@ docker run -p 8000:8000 --env-file .env yourdockerhubname/factoryeye:latest
 - [x] Champion vs Challenger SLA model regression gating (`scripts/model_gate.py`)
 - [x] Support for RTSP camera streams (`api/rtsp_stream.py`)
 - [x] A/B canary testing between model versions in production traffic (`api/canary.py`)
+- [x] Zero-shot edge anomaly detection & out-of-distribution novel flaw discovery engine (`api/anomaly_detector.py`)
 - [ ] S3 artifact backend for MLflow (replacing local filesystem)
 
 ---

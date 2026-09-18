@@ -372,6 +372,57 @@ class CoilQualityMapExport(BaseModel):
     profile_summary: Dict[str, Any]
     shear_cut_plan: ShearCutPlanResponse
 
+# ── 9. Zero-Shot Edge Anomaly & Novel Flaw Discovery Schemas ─────────────────
+class AnomalyBoundingBox(BaseModel):
+    bbox: List[int] = Field(..., description="[x1, y1, x2, y2] bounding box coordinates")
+    anomaly_intensity: float = Field(..., ge=0.0, le=1.0, description="Normalized localized anomaly score")
+    area_px: int = Field(..., ge=0, description="Area in pixels of anomalous region")
+    suggested_tag: str = Field(default="novel_anomaly_candidate", description="Preliminary category heuristic")
+
+class AnomalyDetectResponse(BaseModel):
+    anomaly_score: float = Field(..., ge=0.0, le=1.0, description="Global surface irregularity and entropy index")
+    is_anomalous: bool = Field(..., description="True if anomaly_score exceeds calibrated sensitivity threshold")
+    threshold: float = Field(default=0.45, description="Operating sensitivity threshold")
+    spectral_entropy: float = Field(..., description="2D FFT log-spectral energy entropy")
+    gradient_variance: float = Field(..., description="Spatial gradient variation magnitude")
+    anomaly_bboxes: List[AnomalyBoundingBox] = Field(default_factory=list, description="Localized bounding boxes of novel anomalies")
+    annotated_heatmap: Optional[str] = Field(None, description="Base64 encoded jet colormap anomaly heatmap")
+    quarantined: bool = Field(default=False, description="True if frame was sequestered to novel flaw discovery pool")
+    quarantine_filename: Optional[str] = None
+    inference_ms: float
+
+class NovelFlawCandidate(BaseModel):
+    candidate_id: str
+    filename: str
+    timestamp_utc: float
+    datetime_iso: str
+    station_id: str
+    anomaly_score: float
+    status: str = Field(default="PENDING_REVIEW", description="PENDING_REVIEW, CLASSIFIED, DISCARDED")
+    thumbnail_url: str
+    bbox: List[int]
+    classified_as: Optional[str] = None
+
+class NovelFlawListResponse(BaseModel):
+    total_candidates: int
+    pending_review_count: int
+    candidates: List[NovelFlawCandidate]
+
+class NovelFlawClassifyRequest(BaseModel):
+    filename: str
+    action: str = Field(..., description="'promote' or 'discard'")
+    assigned_class: Optional[str] = Field(default="novel_defect", description="New taxonomy defect class name")
+    notes: Optional[str] = None
+
+class AnomalyStatsSummary(BaseModel):
+    rolling_mean_anomaly_score: float
+    ood_event_rate_percent: float
+    total_scans_evaluated: int
+    total_anomalies_flagged: int
+    quarantined_pool_size: int
+    texture_baseline_stability: str = Field(default="STABLE", description="STABLE, DRIFTING, or HIGH_PERTURBATION")
+
+
 
 
 

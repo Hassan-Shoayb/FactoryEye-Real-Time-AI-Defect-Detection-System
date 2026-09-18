@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional, Dict
 
 import cv2
+import numpy as np
 from fastapi import FastAPI, File, UploadFile, Query, WebSocket, WebSocketDisconnect, HTTPException, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, PlainTextResponse, HTMLResponse
@@ -24,7 +25,8 @@ from api.schemas import (
     LedgerBlock, LedgerStatusResponse, SealBatchRequest,
     LedgerVerifyResponse, LedgerBlockListResponse,
     CoilParameters, CoilGeometryResponse, LongitudinalDefectProfileResponse,
-    ShearCutRequest, ShearCutPlanResponse, CoilQualityMapExport
+    ShearCutRequest, ShearCutPlanResponse, CoilQualityMapExport,
+    AnomalyDetectResponse, NovelFlawListResponse, NovelFlawClassifyRequest, AnomalyStatsSummary
 )
 from api.inference import engine
 from api.canary import canary_router
@@ -32,6 +34,7 @@ from api.retrain import retraining_orchestrator
 from api.rca import rca_engine
 from api.ledger import ledger_engine
 from api.digital_twin import digital_twin_engine
+from api.anomaly_detector import anomaly_detector
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -318,6 +321,65 @@ async def export_coil_quality_map(
 ):
     """Exports standardized Coil Quality Map (CQM) JSON for MES, ERP, and flying shear CNC controllers."""
     return digital_twin_engine.export_coil_quality_map(batch_id)
+
+# ── 3g. Zero-Shot Edge Anomaly & Novel Flaw Discovery ────────────────
+@app.post("/anomaly/detect", response_model=AnomalyDetectResponse, tags=["Zero-Shot Anomaly Detection"])
+async def detect_surface_anomaly(
+    file: UploadFile = File(..., description="Surface image to inspect for novel anomalies"),
+    threshold: Optional[float] = Query(0.45, ge=0.0, le=1.0, description="Sensitivity threshold for anomaly classification"),
+    quarantine: bool = Query(False, description="Whether to quarantine frame if anomaly score exceeds threshold"),
+    station_id: str = Query("STATION_01", description="Originating line or station ID")
+):
+    """
+    Performs spatial-frequency dual-domain zero-shot anomaly detection to identify
+    out-of-distribution defects beyond known supervised YOLO classes.
+    """
+    if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Invalid image file format.")
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+    
+    nparr = np.frombuffer(contents, np.uint8)
+    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise HTTPException(status_code=400, detail="Could not decode image.")
+
+    return anomaly_detector.analyze_frame(
+        img_bgr=img_bgr,
+        threshold=threshold,
+        quarantine_if_anomalous=quarantine,
+        station_id=station_id
+    )
+
+@app.get("/anomaly/stats", response_model=AnomalyStatsSummary, tags=["Zero-Shot Anomaly Detection"])
+async def get_anomaly_stats():
+    """Returns rolling statistics on surface anomaly frequency, texture stability, and quarantined candidates."""
+    return anomaly_detector.get_stats()
+
+@app.get("/anomaly/novel-flaws", response_model=NovelFlawListResponse, tags=["Zero-Shot Anomaly Detection"])
+async def list_quarantined_novel_flaws():
+    """Lists quarantined out-of-distribution candidate flaws awaiting expert metallurgical classification."""
+    return anomaly_detector.list_novel_flaws()
+
+@app.get("/anomaly/novel-flaws/{filename}/crop", tags=["Zero-Shot Anomaly Detection"])
+async def get_quarantined_novel_crop(filename: str):
+    """Serves the JPEG image for a quarantined novel flaw candidate."""
+    target_path = anomaly_detector.quarantine_dir / filename
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Novel flaw candidate image not found.")
+    return FileResponse(str(target_path), media_type="image/jpeg")
+
+@app.post("/anomaly/classify-novel", tags=["Zero-Shot Anomaly Detection"])
+async def classify_and_promote_novel_flaw(req: NovelFlawClassifyRequest):
+    """
+    Promotes a quarantined novel defect into the curated dataset for automated continuous retraining,
+    or discards it from quarantine.
+    """
+    result = anomaly_detector.classify_and_promote(req)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message", "Classification failed."))
+    return result
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])

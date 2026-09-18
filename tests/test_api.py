@@ -15,6 +15,7 @@ from api.database import audit_db
 from api.drift import drift_monitor
 from api.canary import canary_router
 from api.ledger import ledger_engine
+from api.anomaly_detector import anomaly_detector
 
 client = TestClient(app)
 
@@ -576,6 +577,90 @@ def test_digital_twin_shear_cut_optimization():
     assert "geometry" in cqm_data
     assert "shear_cut_plan" in cqm_data
 
+def test_anomaly_detect_endpoint():
+    """Verify zero-shot edge anomaly detector endpoint with synthetic steel surface."""
+    img_bytes = create_synthetic_image_bytes(300, 300)
+    files = {"file": ("synthetic_coil_surface.jpg", img_bytes, "image/jpeg")}
+    res = client.post("/anomaly/detect?threshold=0.35&quarantine=true", files=files)
+    assert res.status_code == 200
+    data = res.json()
+    assert "anomaly_score" in data
+    assert "is_anomalous" in data
+    assert "spectral_entropy" in data
+    assert "gradient_variance" in data
+    assert "anomaly_bboxes" in data
+    assert "annotated_heatmap" in data
+    assert "inference_ms" in data
+    assert 0.0 <= data["anomaly_score"] <= 1.0
+    assert isinstance(data["is_anomalous"], bool)
+    assert isinstance(data["anomaly_bboxes"], list)
+    assert data["annotated_heatmap"].startswith("data:image/jpeg;base64,")
+
+def test_anomaly_stats_and_novel_pool():
+    """Verify anomaly detector statistics and novel flaw quarantine candidates."""
+    stats_res = client.get("/anomaly/stats")
+    assert stats_res.status_code == 200
+    stats = stats_res.json()
+    assert "total_scans_evaluated" in stats
+    assert "total_anomalies_flagged" in stats
+    assert "quarantined_pool_size" in stats
+    assert "rolling_mean_anomaly_score" in stats
+    assert "ood_event_rate_percent" in stats
+
+    novel_res = client.get("/anomaly/novel-flaws")
+    assert novel_res.status_code == 200
+    flaws = novel_res.json()
+    assert "total_candidates" in flaws
+    assert "candidates" in flaws
+    assert isinstance(flaws["candidates"], list)
+    if flaws["total_candidates"] > 0:
+        first = flaws["candidates"][0]
+        assert "filename" in first
+        assert "anomaly_score" in first
+        crop_res = client.get(f"/anomaly/novel-flaws/{first['filename']}/crop")
+        assert crop_res.status_code == 200
+        assert len(crop_res.content) > 0
+
+def test_anomaly_classify_and_promote():
+    """Verify novel flaw triage actions: promote to retraining pool and discard."""
+    dummy_name = "test_novel_eval_0.75.jpg"
+    dummy_path = anomaly_detector.quarantine_dir / dummy_name
+    dummy_path.write_bytes(create_synthetic_image_bytes(120, 120))
+
+    # Promote
+    promote_res = client.post(
+        "/anomaly/classify-novel",
+        json={"filename": dummy_name, "action": "promote", "assigned_class": "test_novel_chatter"}
+    )
+    assert promote_res.status_code == 200
+    pdata = promote_res.json()
+    assert pdata["status"] == "promoted"
+    assert pdata["assigned_class"] == "test_novel_chatter"
+
+    # Verify promoted image and label exist
+    promoted_img = anomaly_detector.quarantine_dir.parent / "curated_training_set" / "images" / dummy_name
+    promoted_lbl = anomaly_detector.quarantine_dir.parent / "curated_training_set" / "labels" / "test_novel_eval_0.75.txt"
+    assert promoted_img.exists()
+    assert promoted_lbl.exists()
+
+    # Clean up promoted files
+    if promoted_img.exists():
+        promoted_img.unlink()
+    if promoted_lbl.exists():
+        promoted_lbl.unlink()
+
+    # Discard
+    discard_name = "test_novel_discard_0.80.jpg"
+    discard_path = anomaly_detector.quarantine_dir / discard_name
+    discard_path.write_bytes(create_synthetic_image_bytes(100, 100))
+    disc_res = client.post(
+        "/anomaly/classify-novel",
+        json={"filename": discard_name, "action": "discard"}
+    )
+    assert disc_res.status_code == 200
+    assert disc_res.json()["status"] == "discarded"
+    assert not discard_path.exists()
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -640,4 +725,10 @@ if __name__ == "__main__":
     print("  ✓ test_digital_twin_defect_profile passed")
     test_digital_twin_shear_cut_optimization()
     print("  ✓ test_digital_twin_shear_cut_optimization passed")
-    print("\n🎉 ALL 31 API TESTS PASSED SUCCESSFULLY!")
+    test_anomaly_detect_endpoint()
+    print("  ✓ test_anomaly_detect_endpoint passed")
+    test_anomaly_stats_and_novel_pool()
+    print("  ✓ test_anomaly_stats_and_novel_pool passed")
+    test_anomaly_classify_and_promote()
+    print("  ✓ test_anomaly_classify_and_promote passed")
+    print("\n🎉 ALL 34 API TESTS PASSED SUCCESSFULLY!")
