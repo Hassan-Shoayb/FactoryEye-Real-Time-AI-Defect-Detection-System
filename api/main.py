@@ -26,7 +26,8 @@ from api.schemas import (
     LedgerVerifyResponse, LedgerBlockListResponse,
     CoilParameters, CoilGeometryResponse, LongitudinalDefectProfileResponse,
     ShearCutRequest, ShearCutPlanResponse, CoilQualityMapExport,
-    AnomalyDetectResponse, NovelFlawListResponse, NovelFlawClassifyRequest, AnomalyStatsSummary
+    AnomalyDetectResponse, NovelFlawListResponse, NovelFlawClassifyRequest, AnomalyStatsSummary,
+    CameraRigConfig, CameraRigConfigUpdate, FusedDefect, MultiCamInspectResponse, MultiCamStatusResponse
 )
 from api.inference import engine
 from api.canary import canary_router
@@ -35,6 +36,7 @@ from api.rca import rca_engine
 from api.ledger import ledger_engine
 from api.digital_twin import digital_twin_engine
 from api.anomaly_detector import anomaly_detector
+from api.multicam import multicam_engine
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -380,6 +382,69 @@ async def classify_and_promote_novel_flaw(req: NovelFlawClassifyRequest):
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message", "Classification failed."))
     return result
+
+# ── 3h. Multi-Camera Synchronized Array & Panoramic Stitching ────────────────
+@app.post("/multicam/inspect", response_model=MultiCamInspectResponse, tags=["Multi-Camera Array"])
+async def inspect_multicam_array(
+    file_left: UploadFile = File(..., description="Left camera view (e.g. CAM_TOP_LEFT)"),
+    file_right: UploadFile = File(..., description="Right camera view (e.g. CAM_TOP_RIGHT)"),
+    file_bottom_left: Optional[UploadFile] = File(None, description="Optional Bottom-Left camera view"),
+    file_bottom_right: Optional[UploadFile] = File(None, description="Optional Bottom-Right camera view"),
+    conf: float = Query(0.35, ge=0.0, le=1.0, description="Confidence threshold for defect detection"),
+    render_annotated: bool = Query(True, description="Render Base64 annotated panoramic visualization")
+):
+    """
+    Synchronously ingests adjacent multi-camera array views, stitches a seamless
+    panoramic strip image with linear alpha-ramp feathering, and executes cross-camera
+    Seam-NMS to merge boundary-straddling defect halves into unified global detections.
+    """
+    def decode_upload(file_bytes: bytes) -> np.ndarray:
+        arr = np.frombuffer(file_bytes, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise HTTPException(status_code=400, detail="Could not decode one of the uploaded images.")
+        return img
+
+    left_bytes = await file_left.read()
+    right_bytes = await file_right.read()
+    if not left_bytes or not right_bytes:
+        raise HTTPException(status_code=400, detail="Empty image file uploaded for left or right camera.")
+
+    img_l = decode_upload(left_bytes)
+    img_r = decode_upload(right_bytes)
+
+    img_bl = None
+    img_br = None
+    if file_bottom_left is not None and file_bottom_right is not None:
+        bl_bytes = await file_bottom_left.read()
+        br_bytes = await file_bottom_right.read()
+        if bl_bytes and br_bytes:
+            img_bl = decode_upload(bl_bytes)
+            img_br = decode_upload(br_bytes)
+
+    return multicam_engine.inspect_array(
+        img_left=img_l,
+        img_right=img_r,
+        img_bottom_left=img_bl,
+        img_bottom_right=img_br,
+        conf_threshold=conf,
+        render_annotated=render_annotated
+    )
+
+@app.get("/multicam/rig-config", response_model=CameraRigConfig, tags=["Multi-Camera Array"])
+async def get_multicam_rig_config():
+    """Retrieves current camera rig calibration, optical overlap geometry, and channel topology."""
+    return multicam_engine.get_config()
+
+@app.post("/multicam/rig-config", response_model=CameraRigConfig, tags=["Multi-Camera Array"])
+async def update_multicam_rig_config(update: CameraRigConfigUpdate):
+    """Updates camera rig calibration parameters (overlap pixels, strip width, vertical offset, feathering)."""
+    return multicam_engine.update_config(update)
+
+@app.get("/multicam/status", response_model=MultiCamStatusResponse, tags=["Multi-Camera Array"])
+async def get_multicam_status():
+    """Returns real-time multi-camera array synchronization telemetry, optical alignment stability, and throughput."""
+    return multicam_engine.get_status()
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])

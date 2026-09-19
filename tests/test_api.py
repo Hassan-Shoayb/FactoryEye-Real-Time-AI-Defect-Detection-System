@@ -16,6 +16,8 @@ from api.drift import drift_monitor
 from api.canary import canary_router
 from api.ledger import ledger_engine
 from api.anomaly_detector import anomaly_detector
+from api.multicam import multicam_engine
+from api.schemas import Detection
 
 client = TestClient(app)
 
@@ -661,6 +663,75 @@ def test_anomaly_classify_and_promote():
     assert disc_res.json()["status"] == "discarded"
     assert not discard_path.exists()
 
+def test_multicam_inspect_endpoint():
+    """Verify synchronized multi-camera array inspection and panoramic stitching."""
+    img_left = create_synthetic_image_bytes(640, 480)
+    img_right = create_synthetic_image_bytes(640, 480)
+    files = {
+        "file_left": ("cam_left.jpg", img_left, "image/jpeg"),
+        "file_right": ("cam_right.jpg", img_right, "image/jpeg")
+    }
+    res = client.post("/multicam/inspect?conf=0.25&render_annotated=true", files=files)
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_fused_defects" in data
+    assert "seam_fusions_count" in data
+    assert "panoramic_width_px" in data
+    assert "panoramic_height_px" in data
+    assert "defects" in data
+    assert "surface_balance" in data
+    assert "panoramic_image" in data
+    assert "inference_ms" in data
+    assert data["panoramic_width_px"] == 640 + 640 - 50
+    assert data["panoramic_height_px"] == 480
+    assert data["panoramic_image"].startswith("data:image/jpeg;base64,")
+
+def test_multicam_seam_defect_fusion():
+    """Verify cross-camera Seam-NMS boundary defect deduplication and fusion."""
+    left_det = Detection(label="scratch", confidence=0.82, bbox=[600, 150, 635, 320])
+    right_det = Detection(label="scratch", confidence=0.88, bbox=[10, 155, 45, 315])
+
+    fused, merges = multicam_engine._fuse_boundary_detections(
+        [left_det], [right_det], wl=640, wr=640, overlap_px=50
+    )
+    assert merges == 1
+    assert len(fused) == 1
+    fused_def = fused[0]
+    assert fused_def.seam_fused is True
+    assert fused_def.defect_class == "scratch"
+    assert fused_def.confidence == 0.88
+    assert fused_def.source_cameras == ["CAM_TOP_LEFT", "CAM_TOP_RIGHT"]
+    assert fused_def.global_bbox[0] <= 600
+    assert fused_def.global_bbox[2] >= 635
+
+def test_multicam_rig_config_and_status():
+    """Verify multi-camera rig configuration GET/POST and synchronization status."""
+    cfg_res = client.get("/multicam/rig-config")
+    assert cfg_res.status_code == 200
+    cfg = cfg_res.json()
+    assert cfg["rig_id"] == "RIG-STATION-01-PRIMARY"
+    assert "channels" in cfg
+    assert len(cfg["channels"]) == 2
+
+    up_res = client.post("/multicam/rig-config", json={"overlap_pixels": 60, "blend_feather_px": 25})
+    assert up_res.status_code == 200
+    up_cfg = up_res.json()
+    assert up_cfg["overlap_pixels"] == 60
+    assert up_cfg["blend_feather_px"] == 25
+
+    # Revert back
+    client.post("/multicam/rig-config", json={"overlap_pixels": 50, "blend_feather_px": 20})
+
+    st_res = client.get("/multicam/status")
+    assert st_res.status_code == 200
+    st = st_res.json()
+    assert "active_channels_count" in st
+    assert "sync_jitter_ms" in st
+    assert "optical_alignment_stability" in st
+    assert "composite_fps" in st
+    assert "total_panoramic_scans" in st
+    assert "total_boundary_merges" in st
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -731,4 +802,10 @@ if __name__ == "__main__":
     print("  ✓ test_anomaly_stats_and_novel_pool passed")
     test_anomaly_classify_and_promote()
     print("  ✓ test_anomaly_classify_and_promote passed")
-    print("\n🎉 ALL 34 API TESTS PASSED SUCCESSFULLY!")
+    test_multicam_inspect_endpoint()
+    print("  ✓ test_multicam_inspect_endpoint passed")
+    test_multicam_seam_defect_fusion()
+    print("  ✓ test_multicam_seam_defect_fusion passed")
+    test_multicam_rig_config_and_status()
+    print("  ✓ test_multicam_rig_config_and_status passed")
+    print("\n🎉 ALL 37 API TESTS PASSED SUCCESSFULLY!")

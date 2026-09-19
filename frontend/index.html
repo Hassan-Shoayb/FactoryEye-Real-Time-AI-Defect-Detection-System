@@ -864,6 +864,62 @@
                 </div>
             </div>
 
+            <!-- Multi-Camera Synchronized Array & Panoramic Seam Stitching Card -->
+            <div class="card" style="border: 1px solid rgba(59, 130, 246, 0.4); background: rgba(30, 58, 138, 0.12);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">📷</span>
+                        <div class="card-title" style="margin-bottom: 0;">Multi-Camera Synchronized Array & Panoramic Seam Stitching Engine</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="multicamSyncBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 700;">RIG NOMINAL &bull; 0.42ms JITTER</span>
+                        <span id="multicamSeamBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(59, 130, 246, 0.2); color: #60a5fa; font-weight: 700;">50mm SEAM OVERLAP</span>
+                    </div>
+                </div>
+
+                <!-- MultiCam Telemetry Metrics Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Active Rig Cameras</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #60a5fa;" id="multicamActiveChannels">2 Channels</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">CAM_TOP_LEFT + CAM_TOP_RIGHT</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Full Strip Optical FOV</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #34d399;" id="multicamStripFov">1250 mm</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">0.0mm &rarr; 1250.0mm Coverage</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Seam Boundary Overlap</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #fbbf24;" id="multicamOverlapText">50 px (50 mm)</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Weighted Alpha-Ramp Blending</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Boundary Seam Merges</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #f472b6;" id="multicamBoundaryMerges">0 Flaws Fused</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Cross-Camera Seam NMS</div>
+                    </div>
+                </div>
+
+                <!-- Interactive Multi-Camera Panoramic Inspection Viewer -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Continuous Panoramic Strip Defect Inspection (Composite Panorama)</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn" onclick="runMultiCamDemoScan()" style="padding: 5px 12px; font-size: 12px; background: #2563eb;">⚡ Run Synchronized Array Scan</button>
+                        </div>
+                    </div>
+
+                    <div id="multicamPanoramaContainer" style="background: rgba(15, 23, 42, 0.7); border: 1px dashed var(--border); border-radius: 8px; padding: 14px; text-align: center; min-height: 140px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                        <div id="multicamPanoPlaceholder" style="color: var(--text-muted); font-size: 12px;">
+                            Click <strong>"Run Synchronized Array Scan"</strong> to acquire synchronized left/right camera views, stitch a seamless strip panorama, and execute cross-camera seam flaw fusion.
+                        </div>
+                        <img id="multicamPanoImg" style="display: none; width: 100%; max-height: 280px; object-fit: contain; border-radius: 6px; border: 1px solid #3b82f6;" />
+                        <div id="multicamPanoMeta" style="display: none; margin-top: 8px; font-size: 11px; font-family: monospace; color: var(--text-muted); width: 100%; justify-content: space-between;"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -1051,7 +1107,9 @@
                         body: JSON.stringify({ batch_id: "BATCH-2026-COIL-A", min_prime_length_m: 200.0 })
                     }),
                     fetch("/anomaly/stats"),
-                    fetch("/anomaly/novel-flaws")
+                    fetch("/anomaly/novel-flaws"),
+                    fetch("/multicam/status"),
+                    fetch("/multicam/rig-config")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
@@ -1071,6 +1129,8 @@
                 const twinPlan = await twinPlanRes.json();
                 const anomalyStats = await anomalyStatsRes.json();
                 const novelFlaws = await novelFlawsRes.json();
+                const multicamStatus = await multicamStatusRes.json();
+                const multicamConfig = await multicamConfigRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -1505,8 +1565,116 @@
                         }
                     }
                 }
+
+                // Populate Multi-Camera Rig Telemetry
+                if (multicamStatus && multicamConfig) {
+                    const mb = document.getElementById('multicamSyncBadge');
+                    if (mb) {
+                        mb.innerText = `RIG ${multicamStatus.optical_alignment_stability} • ${multicamStatus.sync_jitter_ms}ms JITTER`;
+                    }
+                    const msb = document.getElementById('multicamSeamBadge');
+                    if (msb) {
+                        msb.innerText = `${multicamConfig.overlap_width_mm}mm SEAM OVERLAP`;
+                    }
+                    const mac = document.getElementById('multicamActiveChannels');
+                    if (mac) {
+                        mac.innerText = `${multicamStatus.active_channels_count} Channels (${multicamStatus.composite_fps} FPS)`;
+                    }
+                    const msf = document.getElementById('multicamStripFov');
+                    if (msf) {
+                        msf.innerText = `${multicamConfig.strip_width_mm} mm`;
+                    }
+                    const mot = document.getElementById('multicamOverlapText');
+                    if (mot) {
+                        mot.innerText = `${multicamConfig.overlap_pixels} px (${multicamConfig.overlap_width_mm} mm)`;
+                    }
+                    const mbm = document.getElementById('multicamBoundaryMerges');
+                    if (mbm) {
+                        mbm.innerText = `${multicamStatus.total_boundary_merges} Flaws Fused`;
+                    }
+                }
             } catch (err) {
                 console.error("Failed to load audit logs:", err);
+            }
+        }
+
+        async function runMultiCamDemoScan() {
+            const panoPlaceholder = document.getElementById('multicamPanoPlaceholder');
+            const panoImg = document.getElementById('multicamPanoImg');
+            const panoMeta = document.getElementById('multicamPanoMeta');
+
+            if (panoPlaceholder) {
+                panoPlaceholder.style.display = 'block';
+                panoPlaceholder.innerText = "⏳ Synchronizing camera array & stitching continuous strip panorama...";
+            }
+
+            try {
+                // Generate synchronized test frames on canvas with seeded boundary flaw
+                const makeCanvasBlob = (defectX, flawType = 'scratch') => {
+                    const c = document.createElement('canvas');
+                    c.width = 640; c.height = 480;
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.fillRect(0, 0, 640, 480);
+                    
+                    // Surface grain texture
+                    for (let i = 0; i < 60; i++) {
+                        ctx.fillStyle = i % 2 === 0 ? '#64748b' : '#cbd5e1';
+                        ctx.fillRect(Math.random() * 640, Math.random() * 480, 15 + Math.random() * 35, 2);
+                    }
+
+                    // Seam-straddling boundary flaw
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.moveTo(defectX, 120);
+                    ctx.lineTo(defectX + 10, 360);
+                    ctx.stroke();
+
+                    return new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+                };
+
+                // Left camera flaw is near right edge (x=620), Right camera flaw is near left edge (x=20)
+                const [blobL, blobR] = await Promise.all([
+                    makeCanvasBlob(620),
+                    makeCanvasBlob(20)
+                ]);
+
+                const formData = new FormData();
+                formData.append('file_left', blobL, 'cam_top_left.jpg');
+                formData.append('file_right', blobR, 'cam_top_right.jpg');
+
+                const res = await fetch('/multicam/inspect?conf=0.25&render_annotated=true', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Multi-camera inspection failed: " + (err.detail || "Error"));
+                    if (panoPlaceholder) panoPlaceholder.innerText = "Multi-camera inspection failed.";
+                    return;
+                }
+
+                const data = await res.json();
+                if (panoPlaceholder) panoPlaceholder.style.display = 'none';
+                if (panoImg && data.panoramic_image) {
+                    panoImg.src = data.panoramic_image;
+                    panoImg.style.display = 'block';
+                }
+                if (panoMeta) {
+                    panoMeta.style.display = 'flex';
+                    panoMeta.innerHTML = `
+                        <span>PANORAMA: <strong>${data.panoramic_width_px} &times; ${data.panoramic_height_px} px</strong></span>
+                        <span>FUSED DEFECTS: <strong style="color: #60a5fa;">${data.total_fused_defects}</strong></span>
+                        <span>SEAM MERGES: <strong style="color: #f472b6;">${data.seam_fusions_count}</strong></span>
+                        <span>LATENCY: <strong style="color: #34d399;">${data.inference_ms} ms</strong></span>
+                    `;
+                }
+                loadAuditLogs();
+            } catch (e) {
+                alert("Multi-camera scan failed: " + e.message);
+                if (panoPlaceholder) panoPlaceholder.innerText = "Scan request failed: " + e.message;
             }
         }
 

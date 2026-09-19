@@ -422,6 +422,62 @@ class AnomalyStatsSummary(BaseModel):
     quarantined_pool_size: int
     texture_baseline_stability: str = Field(default="STABLE", description="STABLE, DRIFTING, or HIGH_PERTURBATION")
 
+# ── 9. Multi-Camera Synchronized Array & Panoramic Stitching Schemas ──────────
+class CameraRigChannel(BaseModel):
+    camera_id: str = Field(..., description="Camera identifier, e.g. CAM_TOP_LEFT, CAM_TOP_RIGHT")
+    surface: str = Field(default="TOP", description="Monitored surface: TOP or BOTTOM")
+    position_index: int = Field(default=0, description="Spatial sequence index across strip width (0=leftmost)")
+    fov_start_mm: float = Field(..., description="Start of optical coverage across strip width in millimeters")
+    fov_end_mm: float = Field(..., description="End of optical coverage across strip width in millimeters")
+    resolution_w: int = Field(default=640, description="Native horizontal pixel resolution")
+    resolution_h: int = Field(default=480, description="Native vertical pixel resolution")
+    is_active: bool = Field(default=True, description="Operational connectivity status")
+
+class CameraRigConfig(BaseModel):
+    rig_id: str = Field(default="RIG-STATION-01-PRIMARY", description="Camera rig identifier")
+    strip_width_mm: float = Field(default=1250.0, description="Physical metal strip width in millimeters")
+    overlap_width_mm: float = Field(default=50.0, description="Calibrated optical overlap width in millimeters")
+    overlap_pixels: int = Field(default=50, description="Calculated pixel overlap width between adjacent cameras")
+    vertical_offset_px: int = Field(default=0, description="Vertical alignment offset in pixels")
+    blend_feather_px: int = Field(default=20, description="Linear alpha-ramp feathering width across seam")
+    channels: List[CameraRigChannel]
+
+class CameraRigConfigUpdate(BaseModel):
+    strip_width_mm: Optional[float] = Field(None, description="Physical metal strip width in millimeters")
+    overlap_width_mm: Optional[float] = Field(None, description="Calibrated optical overlap width in millimeters")
+    overlap_pixels: Optional[int] = Field(None, description="Calculated pixel overlap width between adjacent cameras")
+    vertical_offset_px: Optional[int] = Field(None, description="Vertical alignment offset in pixels")
+    blend_feather_px: Optional[int] = Field(None, description="Linear alpha-ramp feathering width across seam")
+
+class FusedDefect(BaseModel):
+    global_id: str = Field(..., description="Unique fused defect identifier")
+    defect_class: str = Field(..., description="Predicted defect class")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Fused detection confidence")
+    global_bbox: List[int] = Field(..., description="[X_min, Y_min, X_max, Y_max] in panoramic pixel coordinates")
+    strip_position_mm: Dict[str, float] = Field(..., description="{'transverse_mm': float, 'longitudinal_mm': float}")
+    source_cameras: List[str] = Field(..., description="List of camera IDs that contributed to this defect")
+    seam_fused: bool = Field(default=False, description="True if defect was split across camera seam and merged")
+    severity_grade: str = Field(default="LOW", description="LOW, MEDIUM, HIGH, CRITICAL")
+
+class MultiCamInspectResponse(BaseModel):
+    total_fused_defects: int = Field(..., description="Count of unified defects across full strip width")
+    seam_fusions_count: int = Field(..., description="Count of boundary-straddling flaws merged across cameras")
+    panoramic_width_px: int
+    panoramic_height_px: int
+    defects: List[FusedDefect]
+    surface_balance: Dict[str, Any] = Field(default_factory=dict, description="Top vs Bottom surface flaw counts & ratio")
+    panoramic_image: Optional[str] = Field(None, description="Base64 encoded panoramic JPEG image with seam indicators")
+    inference_ms: float = Field(..., description="End-to-end multi-view acquisition, stitching, and fusion latency in ms")
+
+class MultiCamStatusResponse(BaseModel):
+    rig_id: str
+    active_channels_count: int
+    sync_jitter_ms: float = Field(..., description="Hardware timestamp synchronization jitter across cameras")
+    optical_alignment_stability: str = Field(default="NOMINAL", description="NOMINAL, CALIBRATION_REQUIRED, or DEGRADED")
+    composite_fps: float
+    total_panoramic_scans: int
+    total_boundary_merges: int
+
 
 
 
