@@ -920,6 +920,62 @@
                 </div>
             </div>
 
+            <!-- Industrial Thermal & Radiometric IR Multimodal Sensor Fusion Card -->
+            <div class="card" style="border: 1px solid rgba(249, 115, 22, 0.4); background: rgba(124, 45, 18, 0.12);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">🔥</span>
+                        <div class="card-title" style="margin-bottom: 0;">Industrial Thermal & Radiometric IR Multimodal Sensor Fusion</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span id="thermalCrownBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(34, 197, 94, 0.2); color: var(--success); font-weight: 700;">CROWN NORMAL &bull; &Delta;T 18.5&deg;C</span>
+                        <span id="thermalEmissivityBadge" style="font-size: 11px; padding: 4px 10px; border-radius: 9999px; background: rgba(249, 115, 22, 0.2); color: #fb923c; font-weight: 700;">&epsilon; = 0.85 (STEEL)</span>
+                    </div>
+                </div>
+
+                <!-- Thermal Telemetry Metrics Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Mean Strip Temperature</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #fb923c;" id="thermalMeanTemp">918.4 &deg;C</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Target: 920.0 &deg;C &plusmn; 35&deg;C</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Edge-to-Center Crown</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #34d399;" id="thermalCrownDelta">+18.5 &deg;C</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Transverse Parabolic Balance</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Structural Thermal Tears</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #ef4444;" id="thermalStructuralCount">0 Verified</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Chill Cracks &amp; Hot Tears</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Superficial Marks Suppressed</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #60a5fa;" id="thermalSuperficialCount">0 Suppressed</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Prevents False Line Stoppage</div>
+                    </div>
+                </div>
+
+                <!-- Interactive Thermal Inspection & Heatmap Display -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <span style="font-size: 12px; font-weight: 600; color: var(--text-main);">Radiometric Ironbow False-Color Visualization with Isotherms</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn" onclick="runThermalDemoScan()" style="padding: 5px 12px; font-size: 12px; background: #ea580c;">🔥 Run Multimodal Thermal Scan</button>
+                        </div>
+                    </div>
+
+                    <div id="thermalHeatmapContainer" style="background: rgba(15, 23, 42, 0.7); border: 1px dashed var(--border); border-radius: 8px; padding: 14px; text-align: center; min-height: 140px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                        <div id="thermalHeatmapPlaceholder" style="color: var(--text-muted); font-size: 12px;">
+                            Click <strong>"Run Multimodal Thermal Scan"</strong> to execute optical-thermal cross-registration, evaluate thermal gradient anomalies, and verify structural fissures.
+                        </div>
+                        <img id="thermalHeatmapImg" style="display: none; width: 100%; max-height: 280px; object-fit: contain; border-radius: 6px; border: 1px solid #ea580c;" />
+                        <div id="thermalHeatmapMeta" style="display: none; margin-top: 8px; font-size: 11px; font-family: monospace; color: var(--text-muted); width: 100%; justify-content: space-between;"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="card-title">Historical Defect Audit Trail</div>
@@ -1085,7 +1141,14 @@
                 const stationVal = document.getElementById('stationFilter') ? document.getElementById('stationFilter').value : '';
                 const defectsUrl = stationVal ? `/audit/defects?limit=25&station_id=${encodeURIComponent(stationVal)}` : '/audit/defects?limit=25';
 
-                const [statsRes, logsRes, trendsRes, stationsRes, alRes, canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes, rcaDiagRes, rcaOrdersRes, ledgerStatusRes, ledgerBlocksRes, twinGeoRes, twinProfRes, twinPlanRes, anomalyStatsRes, novelFlawsRes] = await Promise.all([
+                const [
+                    statsRes, logsRes, trendsRes, stationsRes, alRes,
+                    canaryCfgRes, canaryMetRes, retrainSumRes, retrainJobsRes,
+                    rcaDiagRes, rcaOrdersRes, ledgerStatusRes, ledgerBlocksRes,
+                    twinGeoRes, twinProfRes, twinPlanRes, anomalyStatsRes, novelFlawsRes,
+                    multicamStatusRes, multicamConfigRes,
+                    thermalStatusRes, thermalProfileRes
+                ] = await Promise.all([
                     fetch("/audit/stats/summary"),
                     fetch(defectsUrl),
                     fetch("/audit/stats/trends"),
@@ -1109,7 +1172,9 @@
                     fetch("/anomaly/stats"),
                     fetch("/anomaly/novel-flaws"),
                     fetch("/multicam/status"),
-                    fetch("/multicam/rig-config")
+                    fetch("/multicam/rig-config"),
+                    fetch("/thermal/status"),
+                    fetch("/thermal/profile")
                 ]);
                 const stats = await statsRes.json();
                 const logs = await logsRes.json();
@@ -1131,6 +1196,8 @@
                 const novelFlaws = await novelFlawsRes.json();
                 const multicamStatus = await multicamStatusRes.json();
                 const multicamConfig = await multicamConfigRes.json();
+                const thermalStatus = await thermalStatusRes.json();
+                const thermalProfile = await thermalProfileRes.json();
 
                 document.getElementById('auditTotal').innerText = stats.total_inspections;
                 document.getElementById('auditYield').innerText = stats.quality_yield_percent + "%";
@@ -1593,6 +1660,39 @@
                         mbm.innerText = `${multicamStatus.total_boundary_merges} Flaws Fused`;
                     }
                 }
+
+                // Populate Industrial Thermal & Radiometric IR Telemetry
+                if (thermalStatus && thermalProfile) {
+                    const tcb = document.getElementById('thermalCrownBadge');
+                    if (tcb) {
+                        const crownStatus = thermalProfile.crown_status || "NORMAL";
+                        const delta = thermalProfile.delta_t_crown_c || 0;
+                        tcb.innerHTML = `CROWN ${crownStatus} &bull; &Delta;T ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}&deg;C`;
+                        tcb.style.background = crownStatus === "NORMAL" ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)";
+                        tcb.style.color = crownStatus === "NORMAL" ? "var(--success)" : "var(--danger)";
+                    }
+                    const teb = document.getElementById('thermalEmissivityBadge');
+                    if (teb) {
+                        teb.innerHTML = `&epsilon; = ${thermalStatus.emissivity.toFixed(2)} (${thermalStatus.optical_thermal_registration})`;
+                    }
+                    const tmt = document.getElementById('thermalMeanTemp');
+                    if (tmt) {
+                        tmt.innerHTML = `${thermalProfile.mean_strip_temperature_c.toFixed(1)} &deg;C`;
+                    }
+                    const tcd = document.getElementById('thermalCrownDelta');
+                    if (tcd) {
+                        const delta = thermalProfile.delta_t_crown_c;
+                        tcd.innerHTML = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} &deg;C`;
+                    }
+                    const tsc = document.getElementById('thermalStructuralCount');
+                    if (tsc) {
+                        tsc.innerText = `${thermalStatus.total_structural_tears_flagged} Flagged`;
+                    }
+                    const tsfc = document.getElementById('thermalSuperficialCount');
+                    if (tsfc) {
+                        tsfc.innerText = `${thermalStatus.total_thermal_scans} Scans Evaluated`;
+                    }
+                }
             } catch (err) {
                 console.error("Failed to load audit logs:", err);
             }
@@ -1675,6 +1775,93 @@
             } catch (e) {
                 alert("Multi-camera scan failed: " + e.message);
                 if (panoPlaceholder) panoPlaceholder.innerText = "Scan request failed: " + e.message;
+            }
+        }
+
+        async function runThermalDemoScan() {
+            const placeholder = document.getElementById('thermalHeatmapPlaceholder');
+            const imgEl = document.getElementById('thermalHeatmapImg');
+            const metaEl = document.getElementById('thermalHeatmapMeta');
+
+            if (placeholder) {
+                placeholder.style.display = 'block';
+                placeholder.innerText = "⏳ Executing optical-thermal cross-registration & radiometric gradient synthesis...";
+            }
+
+            try {
+                // Generate synthetic hot steel slab optical frame with chill fissure & superficial mark
+                const c = document.createElement('canvas');
+                c.width = 640; c.height = 480;
+                const ctx = c.getContext('2d');
+                
+                // Hot steel radiant glow background
+                const grad = ctx.createLinearGradient(0, 0, 640, 0);
+                grad.addColorStop(0, '#78350f');
+                grad.addColorStop(0.5, '#b45309');
+                grad.addColorStop(1, '#78350f');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 640, 480);
+
+                // Grain texture
+                for (let i = 0; i < 50; i++) {
+                    ctx.fillStyle = i % 2 === 0 ? '#92400e' : '#d97706';
+                    ctx.fillRect(Math.random() * 640, Math.random() * 480, 20 + Math.random() * 40, 2);
+                }
+
+                // Structural quench crack / hot tear (dark fissure)
+                ctx.strokeStyle = '#1e1b4b';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(310, 180);
+                ctx.lineTo(330, 290);
+                ctx.stroke();
+
+                const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+                const formData = new FormData();
+                formData.append('file', blob, 'thermal_slab_sample.jpg');
+
+                const res = await fetch('/thermal/inspect?conf=0.25&render_annotated=true', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert("Thermal inspection failed: " + (err.detail || "Error"));
+                    if (placeholder) placeholder.innerText = "Thermal inspection failed.";
+                    return;
+                }
+
+                const data = await res.json();
+                if (placeholder) placeholder.style.display = 'none';
+                if (imgEl && data.ironbow_heatmap) {
+                    imgEl.src = data.ironbow_heatmap;
+                    imgEl.style.display = 'block';
+                }
+                if (metaEl) {
+                    metaEl.style.display = 'flex';
+                    metaEl.innerHTML = `
+                        <span>MEAN STRIP: <strong style="color: #fb923c;">${data.mean_strip_temperature_c.toFixed(1)}&deg;C</strong></span>
+                        <span>CROWN &Delta;T: <strong style="color: #34d399;">+${data.crown_differential_c.toFixed(1)}&deg;C</strong></span>
+                        <span>STRUCTURAL TEARS: <strong style="color: #ef4444;">${data.structural_threats_count}</strong></span>
+                        <span>SUPERFICIAL MARKS: <strong style="color: #60a5fa;">${data.superficial_marks_count}</strong></span>
+                        <span>LATENCY: <strong style="color: #a78bfa;">${data.inference_ms.toFixed(1)} ms</strong></span>
+                    `;
+                }
+
+                const tmt = document.getElementById('thermalMeanTemp');
+                if (tmt) tmt.innerHTML = `${data.mean_strip_temperature_c.toFixed(1)} &deg;C`;
+                const tcd = document.getElementById('thermalCrownDelta');
+                if (tcd) tcd.innerHTML = `+${data.crown_differential_c.toFixed(1)} &deg;C`;
+                const tsc = document.getElementById('thermalStructuralCount');
+                if (tsc) tsc.innerText = `${data.structural_threats_count} Verified`;
+                const tsfc = document.getElementById('thermalSuperficialCount');
+                if (tsfc) tsfc.innerText = `${data.superficial_marks_count} Suppressed`;
+
+                loadAuditLogs();
+            } catch (err) {
+                console.error("Thermal scan failed:", err);
+                if (placeholder) placeholder.innerText = "Thermal scan failed: " + err.message;
             }
         }
 

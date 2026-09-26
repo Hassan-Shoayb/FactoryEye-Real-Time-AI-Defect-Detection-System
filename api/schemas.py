@@ -478,6 +478,68 @@ class MultiCamStatusResponse(BaseModel):
     total_panoramic_scans: int
     total_boundary_merges: int
 
+# ── 10. Industrial Thermal & Radiometric IR Multimodal Fusion Schemas ────────
+class ThermalCalibrationConfig(BaseModel):
+    emissivity: float = Field(default=0.85, ge=0.1, le=1.0, description="Surface radiation emissivity factor (steel ~ 0.85)")
+    target_temperature_c: float = Field(default=920.0, description="Nominal strip processing temperature in degrees Celsius")
+    ambient_temperature_c: float = Field(default=28.0, description="Ambient factory air temperature in degrees Celsius")
+    thermal_gradient_threshold_c_per_cm: float = Field(default=15.0, description="Gradient magnitude threshold for structural fissure verification")
+    crown_tolerance_c: float = Field(default=35.0, description="Max acceptable edge-to-center temperature differential in Celsius")
+
+class ThermalCalibrationUpdate(BaseModel):
+    emissivity: Optional[float] = Field(None, ge=0.1, le=1.0, description="Surface radiation emissivity factor")
+    target_temperature_c: Optional[float] = Field(None, description="Nominal strip processing temperature")
+    ambient_temperature_c: Optional[float] = Field(None, description="Ambient factory air temperature")
+    thermal_gradient_threshold_c_per_cm: Optional[float] = Field(None, description="Gradient magnitude threshold")
+    crown_tolerance_c: Optional[float] = Field(None, description="Crown tolerance")
+
+class ThermalCorrelatedDefect(BaseModel):
+    defect_id: str = Field(..., description="Unique defect instance identifier")
+    optical_class: str = Field(..., description="YOLO predicted defect classification")
+    optical_confidence: float = Field(..., ge=0.0, le=1.0, description="Optical model confidence")
+    bbox: List[int] = Field(..., description="[x1, y1, x2, y2] bounding box coordinates")
+    mean_temp_c: float = Field(..., description="Mean localized temperature inside bounding box")
+    delta_temp_c: float = Field(..., description="Localized temperature delta against surrounding baseline in Celsius")
+    thermal_gradient_mag: float = Field(..., description="Local thermal gradient magnitude in C/cm")
+    multimodal_attribution: str = Field(..., description="STRUCTURAL_HOT_TEAR, CHILL_CRACK, SUPERFICIAL_MARK, or INTERNAL_INCLUSION")
+    is_structural_threat: bool = Field(..., description="True if verified through thermal signature as true structural fissure")
+    severity_grade: str = Field(default="LOW", description="LOW, MEDIUM, HIGH, CRITICAL")
+
+class TransverseThermalPoint(BaseModel):
+    position_percent: float = Field(..., description="Normalized transverse position (0% Left Drive Side, 100% Right Work Side)")
+    position_mm: float = Field(..., description="Physical transverse coordinate across strip in millimeters")
+    temperature_c: float = Field(..., description="Local temperature in degrees Celsius")
+    region: str = Field(..., description="LEFT_EDGE, QUARTER_DRIVE, CENTER_CROWN, QUARTER_WORK, RIGHT_EDGE")
+
+class ThermalProfileResponse(BaseModel):
+    mean_strip_temperature_c: float
+    center_crown_temp_c: float
+    left_edge_temp_c: float
+    right_edge_temp_c: float
+    delta_t_crown_c: float = Field(..., description="T_center - (T_left + T_right)/2")
+    crown_status: str = Field(default="NORMAL", description="NORMAL, OVERCOOLED_EDGES, or HOT_STREAK")
+    transverse_profile: List[TransverseThermalPoint]
+
+class ThermalInspectResponse(BaseModel):
+    total_defects_evaluated: int
+    structural_threats_count: int
+    superficial_marks_count: int
+    mean_strip_temperature_c: float
+    crown_differential_c: float
+    defects: List[ThermalCorrelatedDefect]
+    transverse_profile: ThermalProfileResponse
+    ironbow_heatmap: Optional[str] = Field(None, description="Base64 encoded Ironbow thermal visualization with isotherms")
+    inference_ms: float
+
+class ThermalStatusResponse(BaseModel):
+    sensor_id: str = Field(default="LWIR-FLIR-A655SC-PRIMARY")
+    emissivity: float
+    operational_range_c: str = Field(default="400C - 1250C")
+    optical_thermal_registration: str = Field(default="ALIGNED_SUBCENTIMETER")
+    total_thermal_scans: int
+    total_structural_tears_flagged: int
+    thermal_fps: float
+
 
 
 

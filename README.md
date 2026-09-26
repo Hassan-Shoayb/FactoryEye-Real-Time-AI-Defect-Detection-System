@@ -125,6 +125,7 @@ defect-detection/
 │   ├── digital_twin.py         # Coil digital twin 3D/2.5D surface topology & automated flying shear-cut plan optimizer
 │   ├── anomaly_detector.py     # Zero-shot edge anomaly detector, dual-domain FFT spectral residual & novel flaw discovery
 │   ├── multicam.py             # Multi-camera synchronized array fusion, panoramic seam stitching & Seam-NMS
+│   ├── thermal_fusion.py       # Industrial thermal & radiometric IR multimodal sensor fusion, crown analysis & emissivity compensation
 │   ├── schemas.py              # Pydantic v2 request/response contracts
 │   ├── alerts.py               # Slack webhook alerting with debouncing
 │   ├── metrics.py              # Prometheus latency histogram & defect metrics (/metrics)
@@ -758,6 +759,38 @@ curl http://localhost:8000/multicam/status
 
 ---
 
+### Industrial Thermal & Radiometric IR Multimodal Fusion
+
+For high-temperature hot rolling and continuous casting lines ($400^\circ\text{C} - 1250^\circ\text{C}$), FactoryEye fuses optical RGB imagery with Long-Wave Infrared (LWIR) radiometric thermal matrices:
+
+- **Stefan-Boltzmann Emissivity Compensation**: Accounts for surface emissivity variations ($\epsilon = 0.85$ standard hot steel preset) according to $T_{\text{corr}} = T \cdot \left(\frac{\epsilon_{\text{calibrated}}}{0.85}\right)^{0.25}$.
+- **Spatial Thermal Gradient Calculation ($\|\nabla T\|$ in $^\circ\text{C/cm}$)**: Applies 2D spatial Sobel derivative operators to isolate true structural fissures from ambient heat dissipation.
+- **Multimodal Defect Attribution**: Cross-correlates optical YOLO bounding boxes with localized thermal deltas. Differentiates critical structural hot tears and quench fissures ($\Delta T < -15^\circ\text{C}$ or $> +15^\circ\text{C}$) from superficial optical-only surface scuffs ($|\Delta T| < 5^\circ\text{C}$), preventing false emergency line stoppages.
+- **Transverse Crown Profiling**: Computes continuous 5-point thermal distribution across strip width (Left Edge, Quarter Drive, Center Crown, Quarter Work, Right Edge) and flags parabolic crown differential anomalies ($\Delta T_{\text{crown}} = T_{\text{center}} - \frac{T_{\text{left}} + T_{\text{right}}}{2}$).
+- **Radiometric Ironbow Visualization**: Renders false-color Ironbow/Inferno heatmaps with embedded isotherm contour lines ($850^\circ\text{C}, 900^\circ\text{C}, 950^\circ\text{C}$) and localized defect temperature tags in Base64 JPEG.
+
+**Thermal Endpoints:**
+- **`POST /thermal/inspect`**: Runs synchronized multimodal optical + LWIR thermal analysis, thermal gradient extraction, and isotherm colormap rendering.
+- **`GET /thermal/profile`**: Computes 5-point transverse strip thermal distribution and edge-to-center crown differential.
+- **`GET /thermal/status`**: Returns radiometric sensor calibration, emissivity factor ($\epsilon$), and inspection frame rate.
+- **`POST /thermal/calibrate`**: Dynamically adjusts emissivity, target processing temperature, and crown alarm thresholds.
+
+```bash
+# Execute synchronized optical + thermal inspection
+curl -X POST "http://localhost:8000/thermal/inspect?conf=0.25&render_annotated=true" \
+  -F "file=@data/samples/sample_inclusion.jpg"
+
+# Fetch transverse crown temperature profile
+curl http://localhost:8000/thermal/profile?strip_width_mm=1250.0
+
+# Calibrate steel emissivity
+curl -X POST "http://localhost:8000/thermal/calibrate" \
+  -H "Content-Type: application/json" \
+  -d '{"emissivity": 0.88, "crown_tolerance_c": 35.0}'
+```
+
+---
+
 ## MLflow Experiment Tracking
 
 Every training run is automatically logged. To compare runs:
@@ -813,7 +846,7 @@ docker compose up --build --force-recreate
 
 ## Running Tests
 
-FactoryEye includes an end-to-end integration and API verification suite testing all 37 endpoints and subsystems:
+FactoryEye includes an end-to-end integration and API verification suite testing all 40 endpoints and subsystems:
 
 ```bash
 make test
@@ -861,8 +894,11 @@ Running FactoryEye API Tests...
   ✓ test_multicam_inspect_endpoint passed
   ✓ test_multicam_seam_defect_fusion passed
   ✓ test_multicam_rig_config_and_status passed
+  ✓ test_thermal_inspect_endpoint passed
+  ✓ test_thermal_subsurface_correlation passed
+  ✓ test_thermal_calibrate_and_status passed
 
-🎉 ALL 37 API TESTS PASSED SUCCESSFULLY!
+🎉 ALL 40 API TESTS PASSED SUCCESSFULLY!
 ```
 
 Tests use FastAPI's `TestClient` — no server needs to be running.
@@ -906,6 +942,7 @@ docker run -p 8000:8000 --env-file .env yourdockerhubname/factoryeye:latest
 - [x] A/B canary testing between model versions in production traffic (`api/canary.py`)
 - [x] Zero-shot edge anomaly detection & out-of-distribution novel flaw discovery engine (`api/anomaly_detector.py`)
 - [x] Multi-camera synchronized array fusion & panoramic seam stitching engine (`api/multicam.py`)
+- [x] Industrial Thermal & Radiometric IR Multimodal Sensor Fusion Engine (`api/thermal_fusion.py`)
 - [ ] S3 artifact backend for MLflow (replacing local filesystem)
 
 ---

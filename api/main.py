@@ -27,7 +27,8 @@ from api.schemas import (
     CoilParameters, CoilGeometryResponse, LongitudinalDefectProfileResponse,
     ShearCutRequest, ShearCutPlanResponse, CoilQualityMapExport,
     AnomalyDetectResponse, NovelFlawListResponse, NovelFlawClassifyRequest, AnomalyStatsSummary,
-    CameraRigConfig, CameraRigConfigUpdate, FusedDefect, MultiCamInspectResponse, MultiCamStatusResponse
+    CameraRigConfig, CameraRigConfigUpdate, FusedDefect, MultiCamInspectResponse, MultiCamStatusResponse,
+    ThermalCalibrationConfig, ThermalCalibrationUpdate, ThermalCorrelatedDefect, ThermalProfileResponse, ThermalInspectResponse, ThermalStatusResponse
 )
 from api.inference import engine
 from api.canary import canary_router
@@ -37,6 +38,7 @@ from api.ledger import ledger_engine
 from api.digital_twin import digital_twin_engine
 from api.anomaly_detector import anomaly_detector
 from api.multicam import multicam_engine
+from api.thermal_fusion import thermal_engine
 from api.alerts import alert_manager
 from api.metrics import metrics_collector
 from api.drift import drift_monitor
@@ -445,6 +447,71 @@ async def update_multicam_rig_config(update: CameraRigConfigUpdate):
 async def get_multicam_status():
     """Returns real-time multi-camera array synchronization telemetry, optical alignment stability, and throughput."""
     return multicam_engine.get_status()
+
+# ── 3i. Industrial Thermal & Radiometric IR Multimodal Fusion ───────────────
+@app.post("/thermal/inspect", response_model=ThermalInspectResponse, tags=["Thermal IR Fusion"])
+async def inspect_thermal_multimodal(
+    file_optical: Optional[UploadFile] = File(None, description="Surface optical RGB image"),
+    file: Optional[UploadFile] = File(None, description="Surface optical RGB image alias"),
+    file_thermal: Optional[UploadFile] = File(None, description="Optional raw radiometric thermal image/data"),
+    conf: float = Query(0.35, ge=0.0, le=1.0, description="Optical confidence threshold"),
+    render_annotated: bool = Query(True, description="Render Base64 Ironbow heatmap with isotherms")
+):
+    """
+    Performs synchronized optical RGB and radiometric LWIR thermal inspection to correlate
+    optical defects with subsurface thermal gradients, verifying hot tears and quench fissures.
+    """
+    target_upload = file_optical or file
+    if target_upload is None:
+        raise HTTPException(status_code=400, detail="Missing optical image file ('file_optical' or 'file').")
+
+    opt_bytes = await target_upload.read()
+    if not opt_bytes:
+        raise HTTPException(status_code=400, detail="Empty optical image file uploaded.")
+    
+    arr_opt = np.frombuffer(opt_bytes, np.uint8)
+    img_bgr = cv2.imdecode(arr_opt, cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise HTTPException(status_code=400, detail="Could not decode optical image.")
+
+    thermal_mat = None
+    if file_thermal is not None:
+        th_bytes = await file_thermal.read()
+        if th_bytes:
+            arr_th = np.frombuffer(th_bytes, np.uint8)
+            img_th = cv2.imdecode(arr_th, cv2.IMREAD_UNCHANGED)
+            if img_th is not None:
+                if len(img_th.shape) == 3:
+                    img_th = cv2.cvtColor(img_th, cv2.COLOR_BGR2GRAY)
+                if img_th.dtype == np.uint8:
+                    thermal_mat = 400.0 + (img_th.astype(np.float32) / 255.0) * 800.0
+                else:
+                    thermal_mat = img_th.astype(np.float32)
+
+    return thermal_engine.inspect_multimodal(
+        img_bgr=img_bgr,
+        thermal_matrix=thermal_mat,
+        conf_threshold=conf,
+        render_annotated=render_annotated
+    )
+
+@app.get("/thermal/profile", response_model=ThermalProfileResponse, tags=["Thermal IR Fusion"])
+async def get_thermal_profile(
+    strip_width_mm: float = Query(1250.0, description="Strip width in millimeters")
+):
+    """Returns transverse thermal distribution and edge-to-center crown differential."""
+    sample_mat = thermal_engine.synthesize_radiometric_matrix(480, 640)
+    return thermal_engine.compute_transverse_profile(sample_mat, strip_width_mm=strip_width_mm)
+
+@app.get("/thermal/status", response_model=ThermalStatusResponse, tags=["Thermal IR Fusion"])
+async def get_thermal_status():
+    """Returns real-time thermal sensor calibration, emissivity factor, and inspection throughput."""
+    return thermal_engine.get_status()
+
+@app.post("/thermal/calibrate", response_model=ThermalCalibrationConfig, tags=["Thermal IR Fusion"])
+async def calibrate_thermal_sensor(update: ThermalCalibrationUpdate):
+    """Updates steel emissivity, nominal target temperature, and thermal gradient alarm thresholds."""
+    return thermal_engine.update_config(update)
 
 # ── 4. QA Defect Audit Log & Analytics ──────────────────────────────────────
 @app.get("/audit/defects", response_model=AuditQueryResponse, tags=["Audit & QA"])

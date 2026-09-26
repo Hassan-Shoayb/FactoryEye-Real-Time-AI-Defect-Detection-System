@@ -17,6 +17,7 @@ from api.canary import canary_router
 from api.ledger import ledger_engine
 from api.anomaly_detector import anomaly_detector
 from api.multicam import multicam_engine
+from api.thermal_fusion import thermal_engine
 from api.schemas import Detection
 
 client = TestClient(app)
@@ -732,6 +733,95 @@ def test_multicam_rig_config_and_status():
     assert "total_panoramic_scans" in st
     assert "total_boundary_merges" in st
 
+def test_thermal_inspect_endpoint():
+    """Verify synchronized multimodal optical + LWIR radiometric thermal defect inspection."""
+    img_bytes = create_synthetic_image_bytes(640, 480)
+    files = {"file": ("hot_strip.jpg", img_bytes, "image/jpeg")}
+    res = client.post("/thermal/inspect?conf=0.25&render_annotated=true", files=files)
+    assert res.status_code == 200
+    data = res.json()
+    assert "mean_strip_temperature_c" in data
+    assert "crown_differential_c" in data
+    assert "structural_threats_count" in data
+    assert "superficial_marks_count" in data
+    assert "defects" in data
+    assert "transverse_profile" in data
+    assert "ironbow_heatmap" in data
+    assert "inference_ms" in data
+    assert data["mean_strip_temperature_c"] > 500.0
+    assert data["ironbow_heatmap"].startswith("data:image/jpeg;base64,")
+
+def test_thermal_subsurface_correlation():
+    """Verify multimodal defect attribution: hot tears vs chill cracks vs superficial marks."""
+    # Construct synthetic 480x640 thermal matrix with baseline 920.0 C
+    t_mat = np.full((480, 640), 920.0, dtype=np.float32)
+    # 1. Cold chill crack fissure in ROI 1
+    t_mat[100:150, 100:150] = 880.0
+    # 2. Hot tear structural fissure in ROI 2
+    t_mat[200:250, 200:250] = 960.0
+    # 3. Superficial surface mark in ROI 3 (no temperature delta)
+    t_mat[300:350, 300:350] = 920.0
+
+    grad_mat = thermal_engine.compute_thermal_gradient(t_mat)
+    dets = [
+        Detection(label="crack", confidence=0.91, bbox=[100, 100, 150, 150]),
+        Detection(label="inclusion", confidence=0.87, bbox=[200, 200, 250, 250]),
+        Detection(label="scratch", confidence=0.78, bbox=[300, 300, 350, 350])
+    ]
+
+    correlated, struct_count, superfic_count = thermal_engine.correlate_multimodal_defects(
+        dets, t_mat, grad_mat
+    )
+    assert len(correlated) == 3
+    assert struct_count == 2
+    assert superfic_count == 1
+
+    crack_def = next(d for d in correlated if d.optical_class == "crack")
+    assert crack_def.multimodal_attribution == "CHILL_CRACK"
+    assert crack_def.is_structural_threat is True
+    assert crack_def.severity_grade == "CRITICAL"
+
+    hot_def = next(d for d in correlated if d.optical_class == "inclusion")
+    assert hot_def.multimodal_attribution == "STRUCTURAL_HOT_TEAR"
+    assert hot_def.is_structural_threat is True
+    assert hot_def.severity_grade == "CRITICAL"
+
+    scratch_def = next(d for d in correlated if d.optical_class == "scratch")
+    assert scratch_def.multimodal_attribution == "SUPERFICIAL_MARK"
+    assert scratch_def.is_structural_threat is False
+    assert scratch_def.severity_grade == "LOW"
+
+def test_thermal_calibrate_and_status():
+    """Verify thermal sensor telemetry, transverse profile, and emissivity calibration."""
+    prof_res = client.get("/thermal/profile?strip_width_mm=1250.0")
+    assert prof_res.status_code == 200
+    prof = prof_res.json()
+    assert "mean_strip_temperature_c" in prof
+    assert "center_crown_temp_c" in prof
+    assert "delta_t_crown_c" in prof
+    assert "transverse_profile" in prof
+    assert len(prof["transverse_profile"]) == 5
+
+    status_res = client.get("/thermal/status")
+    assert status_res.status_code == 200
+    st = status_res.json()
+    assert st["sensor_id"] == "LWIR-FLIR-A655SC-PRIMARY"
+    assert st["optical_thermal_registration"] == "ALIGNED_SUBCENTIMETER"
+    assert st["emissivity"] == 0.85
+
+    # Calibrate emissivity and crown tolerance
+    cal_res = client.post("/thermal/calibrate", json={"emissivity": 0.89, "crown_tolerance_c": 40.0})
+    assert cal_res.status_code == 200
+    cal_data = cal_res.json()
+    assert cal_data["emissivity"] == 0.89
+    assert cal_data["crown_tolerance_c"] == 40.0
+
+    st_updated = client.get("/thermal/status").json()
+    assert st_updated["emissivity"] == 0.89
+
+    # Revert back
+    client.post("/thermal/calibrate", json={"emissivity": 0.85, "crown_tolerance_c": 35.0})
+
 if __name__ == "__main__":
     print("Running FactoryEye API Tests...")
     test_health_endpoint()
@@ -808,4 +898,10 @@ if __name__ == "__main__":
     print("  ✓ test_multicam_seam_defect_fusion passed")
     test_multicam_rig_config_and_status()
     print("  ✓ test_multicam_rig_config_and_status passed")
-    print("\n🎉 ALL 37 API TESTS PASSED SUCCESSFULLY!")
+    test_thermal_inspect_endpoint()
+    print("  ✓ test_thermal_inspect_endpoint passed")
+    test_thermal_subsurface_correlation()
+    print("  ✓ test_thermal_subsurface_correlation passed")
+    test_thermal_calibrate_and_status()
+    print("  ✓ test_thermal_calibrate_and_status passed")
+    print("\n🎉 ALL 40 API TESTS PASSED SUCCESSFULLY!")
